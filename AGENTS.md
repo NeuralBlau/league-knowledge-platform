@@ -22,5 +22,5 @@ Use the [development workflow](docs/development-workflow.md). Human supervision 
 
 - Use [.github/pull_request_template.md](.github/pull_request_template.md). Publicly summarize objective, scope, relevant acceptance criteria, approach, validation, deviations, and follow-up work; include `AB#<id>` where useful.
 - Publish only approved public information. Do not copy private Azure DevOps descriptions, plans, discussions, credentials, or internal URLs into repository files or PRs. Sanitize criteria; keep sensitive evidence private.
-- Respect the task's delivery boundary. Commit, push, or open a PR only when authorized; do not modify Azure DevOps unless explicitly requested.
+- Default delivery for completed PBI work is to commit, push the dedicated PBI branch, and open a PR for human review. Honor explicit local-only, no-commit, or no-push instructions; do not modify Azure DevOps unless explicitly requested.
 - Leave final PR approval and merge to a human. Never self-approve or merge a PR. Revalidate changes requested during review; return material design changes to the design-review gate.

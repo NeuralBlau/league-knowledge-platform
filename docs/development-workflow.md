@@ -60,7 +60,7 @@ The repository currently contains documentation and no configured application te
 
 ## 5. Prepare the public pull request
 
-When the task authorizes committing, pushing, and opening a PR, use the [PR template](../.github/pull_request_template.md). Otherwise, provide the local diff and validation results for human review and stop at the requested delivery boundary.
+The default delivery for completed PBI work is to commit the validated changes, push the dedicated PBI branch, and open a PR using the [PR template](../.github/pull_request_template.md). Give the human reviewer the PR link and leave final review and merge to them. Honor explicit local-only, no-commit, or no-push instructions: provide the local diff and validation results and stop at that delivery boundary.
 
 The public PR description should stand on its own and include:
 
