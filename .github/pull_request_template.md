@@ -5,7 +5,11 @@ text, sensitive evidence, internal URLs, and credentials in the private task con
 
 <!-- Explain the problem, resulting behavior, included changes, and exclusions. -->
 
-PBI reference: `AB#<id>`
+<!-- GitHub may expand AB# references into private Azure DevOps URLs. Include a PBI
+reference only if its rendered form is publication-safe; otherwise provide it
+privately to the authorized reviewer. -->
+
+PBI reference: <!-- public-safe reference, or "available privately" -->
 
 ## Relevant acceptance criteria
 
@@ -17,14 +21,19 @@ to the authorized human reviewer in the private planning context. -->
 | --- | --- |
 | <!-- Criterion or private-evidence note --> | <!-- Check and outcome --> |
 
-## Implementation approach and design review
+## Requirement review and design approval
 
-<!-- Confirm the PBI met the Definition of Ready before agent planning; technical
-implementation details were not prerequisites. Explain the approach and key tradeoffs.
-For a non-trivial PBI, confirm that a
-human approved the plan before production code changed and approved any material
-revisions. Do not paste the private plan. If the full plan was unnecessary, explain
-why this was a narrow documentation, typo, or mechanical change. -->
+<!-- Confirm the separate Requirement Quality Review returned READY before Technical
+Planning, even if a narrow mechanical change skipped the full plan. Explain the
+public-safe approach and key tradeoffs. For a required plan, identify its explicit
+version (v1, v2, etc.) and confirm that a human approved that version before
+implementation. Identify any materially revised version and renewed approval.
+If a full plan was explicitly unnecessary, explain the narrow-change exception.
+Do not paste the private review or implementation plan. -->
+
+- [ ] Requirement Quality Review returned `READY` before Technical Planning.
+- Approved Technical Implementation Plan version, or explicit narrow-change exception: <!-- vN / exception -->
+- Material plan revisions and renewed approval, if applicable: <!-- vN or None -->
 
 ## Validation and self-review
 
