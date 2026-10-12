@@ -1,6 +1,6 @@
 # ADR 004: Minimal deterministic metadata
 
-**Status:** Accepted
+**Status:** Accepted (amended for source and operational metadata)
 
 ## Context
 
@@ -8,10 +8,10 @@ Detailed coaching labels inferred during ingestion would add cost, uncertainty, 
 
 ## Decision
 
-Store only metadata known from the source or ingestion process: source identity, title, creator, URL, publication date, content type, chunk identity, timestamps, and primary champion or role where applicable. Do not add LLM-generated semantic labels for concepts such as lane dynamics, gankability, wave clear, game phase, or teamfight strategy in V1.
+Keep Bronze and Silver source and operational metadata deterministic and traceable: source identity, title, creator, URL, publication date, content type, section identity, timestamps, and primary Champion or role where applicable. Silver does not require LLM-generated semantic chunk labels for concepts such as lane dynamics, gankability, wave clear, game phase, or teamfight strategy.
 
-Search uses source text; the coach interprets its meaning at runtime through retrieval and reasoning. Evaluate hybrid retrieval before considering richer semantic metadata.
+This restriction does not prohibit an LLM from comparing transient transcripts during [source selection](007-two-stage-source-selection.md) or the [Knowledge Curator](008-canonical-gold-wiki.md) from representing semantic knowledge in Gold.
 
 ## Consequences
 
-Metadata is predictable and easy to audit. Some concept-specific filtering is unavailable initially; retrieval evaluation will show whether that limitation matters.
+Source metadata remains predictable and auditable without imposing a fixed semantic ontology on Silver. Gold can still express coaching concepts and their relationships as curated knowledge.

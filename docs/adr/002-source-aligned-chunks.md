@@ -1,6 +1,6 @@
 # ADR 002: Source-aligned chunks
 
-**Status:** Accepted
+**Status:** Superseded for the Gold/retrieval model; retained for Silver
 
 ## Context
 
@@ -8,8 +8,8 @@ The first retrieval system needs useful text passages with clear provenance. Gen
 
 ## Decision
 
-Clean source content and split it into chunks that remain aligned with the original material. Preserve source references and timestamps where available. Do not turn source content into LLM-generated canonical knowledge units in V1.
+The original decision was to clean source content and split it into chunks aligned with the original material, preserving source references and timestamps, rather than generating canonical knowledge units. That source-faithful representation remains a Silver responsibility.
 
 ## Consequences
 
-The pipeline remains easier to trace, reproduce, and inspect. Source passages may contain some redundancy, which retrieval evaluation can measure before adding more aggressive transformations.
+The source processing path remains traceable and inspectable. Gold now uses an agent-curated Markdown Wiki, which may integrate and restructure knowledge while preserving provenance and contradictions. The [Gold decision](008-canonical-gold-wiki.md) supersedes the original restriction on curated knowledge; the [retrieval index](010-incremental-gold-retrieval-index.md) is derived from Gold rather than directly treating Silver chunks as canonical knowledge.

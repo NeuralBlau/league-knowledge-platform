@@ -1,6 +1,6 @@
 # League Knowledge Platform
 
-The League Knowledge Platform is designed to prepare curated League of Legends expert knowledge for a voice-first AI coach. It will select useful sources, process them into traceable text chunks, and make them available for retrieval when the coach answers a player's question.
+The League Knowledge Platform builds curated League of Legends knowledge for a voice-first AI coach. It discovers educational sources, integrates their content into a traceable Markdown Knowledge Wiki, and maintains a local retrieval index derived from that Wiki.
 
 ## Status
 
@@ -8,12 +8,12 @@ V1 is in planning and development. The architecture below describes the accepted
 
 ## V1 at a glance
 
-- Two primary source categories: Champion + Role guides and General Concept guides. V1 targets all champions through their relevant role combinations.
-- Automated discovery and selection of candidate sources, followed by batch Bronze, Silver, and Gold processing.
-- Source-aligned chunks with minimal metadata derived from the source or ingestion process.
-- One Azure AI Search index for unstructured expert knowledge. The coach retrieves relevant text and interprets game concepts at runtime.
-- Dedicated Champion Matchup guides are future scope.
+- A versioned local catalog targets all Champions for initial knowledge acquisition. Role-specific guidance and reusable concepts may emerge from the selected sources; V1 does not require a Champion × Role target matrix or systematic general-concept targets.
+- Manually initiated, resumable runs repeatedly seek new knowledge. Each logical run attempts the configured targets and integrates at most one newly selected source per target. No Champion is permanently complete.
+- For each target, discovery seeks approximately 20 unseen YouTube candidates where available. Deterministic metadata ranking narrows them to the Top 3 for transient transcript comparison; an LLM selects one source, and only that source enters Bronze.
+- Silver cleans and segments selected material faithfully. A Knowledge Curator integrates it into Gold, the canonical, versioned Markdown Knowledge Wiki.
+- Local SQL stores operational progress and knowledge-change counts. An incremental local retrieval/vector index serves Gold. Azure is a possible future deployment target, not a V1 requirement.
 
-See [V1 scope](docs/scope.md) and [architecture](docs/architecture.md) for details. Accepted decisions are recorded in the ADRs for [medallion processing](docs/adr/001-medallion-architecture.md), [source-aligned chunks](docs/adr/002-source-aligned-chunks.md), [one search index](docs/adr/003-single-search-index.md), and [minimal deterministic metadata](docs/adr/004-minimal-deterministic-metadata.md).
+See [V1 scope](docs/scope.md), [architecture](docs/architecture.md), and the [architecture decisions](docs/adr/001-medallion-architecture.md) for details. Dedicated Champion Matchup target acquisition and persistent cross-game user memory are outside initial V1 scope.
 
 This repository is part of the larger League AI Coach project.
