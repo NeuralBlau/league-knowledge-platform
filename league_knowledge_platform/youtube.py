@@ -13,6 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from .defaults import DISCOVERY_PAGE_SIZE, DISCOVERY_TIMEOUT_SECONDS
 from .models import CandidateVideo, ChampionTarget, DiscoveryCursor, DiscoveryPage
 
 _SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
@@ -174,8 +175,8 @@ class YouTubeDiscovery:
         *,
         api_key: str | None = None,
         transport: JsonTransport | None = None,
-        page_size: int = 25,
-        timeout_seconds: float = 15,
+        page_size: int = DISCOVERY_PAGE_SIZE,
+        timeout_seconds: float = DISCOVERY_TIMEOUT_SECONDS,
     ):
         key = api_key if api_key is not None else os.environ.get("YOUTUBE_API_KEY")
         if not isinstance(key, str) or not key.strip():
