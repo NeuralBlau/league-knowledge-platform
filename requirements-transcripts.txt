@@ -1,0 +1,8 @@
+# Optional caption provider; pinned versions used by the offline adapter tests.
+youtube-transcript-api==1.2.4
+requests==2.34.2
+defusedxml==0.7.1
+certifi==2026.7.22
+charset-normalizer==3.5.2
+idna==3.20
+urllib3==2.8.0
