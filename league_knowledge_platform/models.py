@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import re
 from urllib.parse import quote
+
+UNSEEN_CANDIDATE_LIMIT = 20
+_SOURCE_VIDEO_ID = re.compile(r"[A-Za-z0-9_-]+\Z")
+
+
+def _require_video_id(video_id: str) -> None:
+    if not isinstance(video_id, str) or _SOURCE_VIDEO_ID.fullmatch(video_id) is None:
+        raise ValueError("A source requires a usable stable YouTube video ID")
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,3 +84,34 @@ class DiscoveryPage:
             raise ValueError("Continuation cursor belongs to another target")
         if any(candidate.target_id != self.target_id for candidate in self.candidates):
             raise ValueError("A candidate belongs to another target")
+
+
+@dataclass(frozen=True, slots=True)
+class UnseenCandidateSet:
+    """A completed collection; failed or incomplete pools are not results."""
+
+    target_id: str
+    candidates: tuple[CandidateVideo, ...]
+    exhausted: bool
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.target_id, str) or not self.target_id.strip():
+            raise ValueError("An unseen candidate set requires a target")
+        if not isinstance(self.candidates, tuple) or type(self.exhausted) is not bool:
+            raise ValueError("A candidate set requires immutable candidates and Boolean exhaustion")
+        if len(self.candidates) > UNSEEN_CANDIDATE_LIMIT:
+            raise ValueError("An unseen candidate set cannot exceed 20 candidates")
+        if len(self.candidates) < UNSEEN_CANDIDATE_LIMIT and not self.exhausted:
+            raise ValueError("A smaller candidate set requires normal search exhaustion")
+        seen_ids: set[str] = set()
+        for candidate in self.candidates:
+            if not isinstance(candidate, CandidateVideo) or candidate.target_id != self.target_id:
+                raise ValueError("A candidate belongs to another target or has an invalid type")
+            _require_video_id(candidate.video_id)
+            if candidate.video_id in seen_ids:
+                raise ValueError("An unseen candidate set cannot repeat a video ID")
+            seen_ids.add(candidate.video_id)
+
+    @property
+    def target_reached(self) -> bool:
+        return len(self.candidates) == UNSEEN_CANDIDATE_LIMIT
