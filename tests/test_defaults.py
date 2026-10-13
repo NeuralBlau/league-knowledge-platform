@@ -4,7 +4,7 @@ import inspect
 import unittest
 from unittest.mock import patch
 
-from league_knowledge_platform import DEFAULT_RANKING_CONFIG, YouTubeDiscovery
+from league_knowledge_platform import DEFAULT_RANKING_CONFIG, DEFAULT_TRANSCRIPT_CONFIG, YouTubeDiscovery
 from league_knowledge_platform import defaults, models
 
 
@@ -24,6 +24,12 @@ class DefaultsTests(unittest.TestCase):
         self.assertEqual(DEFAULT_RANKING_CONFIG.recency_weight, defaults.RECENCY_WEIGHT)
         self.assertEqual(DEFAULT_RANKING_CONFIG.recency_half_life_days, defaults.RECENCY_HALF_LIFE_DAYS)
         self.assertEqual(DEFAULT_RANKING_CONFIG.score_precision, defaults.RANKING_SCORE_PRECISION)
+        self.assertEqual(DEFAULT_TRANSCRIPT_CONFIG.connect_timeout_seconds,
+                         defaults.TRANSCRIPT_CONNECT_TIMEOUT_SECONDS)
+        self.assertEqual(DEFAULT_TRANSCRIPT_CONFIG.read_timeout_seconds,
+                         defaults.TRANSCRIPT_READ_TIMEOUT_SECONDS)
+        self.assertEqual(defaults.TRANSCRIPT_MAX_RETRIES, 0)
+        self.assertEqual(defaults.TRANSCRIPT_ENGLISH_LOCALE_PREFERENCE, ("en", "en-us", "en-gb"))
 
     def test_discovery_still_uses_runtime_key_with_central_nonsecret_defaults(self):
         class Transport:
