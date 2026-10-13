@@ -1,6 +1,10 @@
 """Local League knowledge acquisition components."""
 
-from .models import CandidateVideo, ChampionTarget, DiscoveryCursor, DiscoveryPage, UnseenCandidateSet
+from .models import (
+    CandidateVideo, ChampionTarget, DiscoveryCursor, DiscoveryPage,
+    RankedCandidate, RankedCandidateSet, UnseenCandidateSet,
+)
+from .ranking import DEFAULT_RANKING_CONFIG, RankingConfig, rank_candidates
 from .source_catalog import SourceCatalogError, SQLiteSourceCatalog, initialize_source_catalog
 from .targets import TargetLoadError, load_targets
 from .unseen import (
@@ -20,8 +24,12 @@ __all__ = [
     "DiscoveryError",
     "DiscoveryFailureKind",
     "DiscoveryPage",
+    "DEFAULT_RANKING_CONFIG",
     "IntegratedSourceReader",
     "PageDiscovery",
+    "RankedCandidate",
+    "RankedCandidateSet",
+    "RankingConfig",
     "SourceCatalogError",
     "SQLiteSourceCatalog",
     "TargetLoadError",
@@ -31,4 +39,5 @@ __all__ = [
     "collect_unseen_candidates",
     "initialize_source_catalog",
     "load_targets",
+    "rank_candidates",
 ]

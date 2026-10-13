@@ -1,6 +1,7 @@
 """Offline collector behavior and integration with real one-page discovery."""
 
 from dataclasses import FrozenInstanceError
+from datetime import datetime, timezone
 from pathlib import Path
 import tempfile
 import unittest
@@ -19,6 +20,7 @@ from league_knowledge_platform import (
     YouTubeDiscovery,
     collect_unseen_candidates,
     initialize_source_catalog,
+    rank_candidates,
 )
 from league_knowledge_platform.youtube import HttpStatusFailure
 
@@ -310,6 +312,72 @@ class UnseenCollectionTests(unittest.TestCase):
         self.assertNotIn("pageToken", transport.calls[0][1])
         self.assertEqual(transport.calls[2][1]["pageToken"], "second-page")
         self.assertEqual(len(transport.calls), 4)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_discovery_collection_ranking_integration_is_read_only_and_preserves_candidates(self):
+        self.catalog.register_integrated("integrated")
+        before = self.path.read_bytes()
+        transport = FakeTransport(
+            {"items": [{"id": {"videoId": name}}
+                       for name in ("integrated", "z-first", "short")],
+             "nextPageToken": "second-page"},
+            {"items": [
+                {"id": "z-first", "snippet": {"title": "First metadata", "channelTitle": "Creator",
+                                              "publishedAt": "2026-10-13T00:00:00Z"},
+                 "statistics": {"viewCount": "100"}, "contentDetails": {"duration": "PT25M"}},
+                {"id": "short", "statistics": {"viewCount": "10000000"},
+                 "contentDetails": {"duration": "PT2M"}},
+            ]},
+            {"items": [{"id": {"videoId": name}}
+                       for name in ("z-first", "a-second", "winner", "missing", "long")]},
+            {"items": [
+                {"id": "z-first", "snippet": {"title": "Later duplicate metadata"},
+                 "statistics": {"viewCount": "999999"}},
+                {"id": "a-second", "snippet": {"publishedAt": "2026-10-13T00:00:00Z"},
+                 "statistics": {"viewCount": "100"}, "contentDetails": {"duration": "PT10M"}},
+                {"id": "winner", "snippet": {"publishedAt": "2025-10-13T00:00:00Z"},
+                 "statistics": {"viewCount": "1000"}, "contentDetails": {"duration": "PT30M"}},
+                {"id": "long", "statistics": {"viewCount": "100000000"},
+                 "contentDetails": {"duration": "PT31M"}},
+            ]},
+        )
+        discovery = YouTubeDiscovery(api_key="offline-test-key", transport=transport)
+        collected = collect_unseen_candidates(TARGET, discovery=discovery, catalog_reader=self.catalog)
+        calls_before_ranking = list(transport.calls)
+        ranked = rank_candidates(collected, reference_time=datetime(2026, 10, 13, tzinfo=timezone.utc))
+        self.assertEqual([item.candidate.video_id for item in ranked.candidates],
+                         ["winner", "z-first", "a-second"])
+        self.assertEqual(ranked.input_count, 6)
+        self.assertEqual(ranked.eligible_count, 4)
+        self.assertTrue(ranked.input_exhausted)
+        self.assertEqual(ranked.candidates[0].score, 0.85)
+        self.assertEqual(ranked.candidates[1].score, ranked.candidates[2].score)
+        self.assertIs(ranked.candidates[1].candidate, collected.candidates[0])
+        self.assertEqual(ranked.candidates[1].candidate.title, "First metadata")
+        self.assertEqual(ranked.candidates[1].candidate.channel_title, "Creator")
+        self.assertEqual(ranked.candidates[1].candidate.view_count, 100)
+        self.assertEqual(ranked.candidates[1].candidate.duration_seconds, 1500)
+        self.assertIsNone(collected.candidates[4].view_count)
+        self.assertEqual(transport.calls, calls_before_ranking)
+        self.assertEqual(len(transport.calls), 4)
+        self.assertEqual(transport.calls[2][1]["pageToken"], "second-page")
+        self.assertEqual(self.catalog.load_integrated_ids(), frozenset({"integrated"}))
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_ranking_does_not_refill_when_full_collected_pool_is_duration_ineligible(self):
+        before = self.path.read_bytes()
+        names = tuple(f"short-{i}" for i in range(20))
+        transport = FakeTransport(
+            {"items": [{"id": {"videoId": name}} for name in names], "nextPageToken": "remaining"},
+            {"items": [{"id": name, "contentDetails": {"duration": "PT2M"}} for name in names]},
+        )
+        discovery = YouTubeDiscovery(api_key="offline-test-key", transport=transport)
+        collected = collect_unseen_candidates(TARGET, discovery=discovery, catalog_reader=self.catalog)
+        ranked = rank_candidates(collected, reference_time=datetime(2026, 10, 13, tzinfo=timezone.utc))
+        self.assertEqual(ranked.candidates, ())
+        self.assertEqual(ranked.input_count, 20)
+        self.assertFalse(ranked.input_exhausted)
+        self.assertEqual(len(transport.calls), 2)
         self.assertEqual(self.path.read_bytes(), before)
 
     def test_discovery_collection_integration_discards_pool_after_later_quota_failure(self):

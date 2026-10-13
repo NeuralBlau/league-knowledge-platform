@@ -1,13 +1,18 @@
-"""Immutable contracts shared by Champion loading and YouTube discovery."""
+"""Immutable acquisition contracts preserving source identity and metadata."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import re
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
-UNSEEN_CANDIDATE_LIMIT = 20
+from .defaults import RANKING_TOP_K, UNSEEN_CANDIDATE_LIMIT
+
+if TYPE_CHECKING:
+    from .ranking import RankingConfig
+
 _SOURCE_VIDEO_ID = re.compile(r"[A-Za-z0-9_-]+\Z")
 
 
@@ -115,3 +120,43 @@ class UnseenCandidateSet:
     @property
     def target_reached(self) -> bool:
         return len(self.candidates) == UNSEEN_CANDIDATE_LIMIT
+
+
+@dataclass(frozen=True, slots=True)
+class RankedCandidate:
+    """An original candidate plus transient, explainable ranking information."""
+
+    candidate: CandidateVideo
+    discovery_index: int
+    popularity: float | None
+    recency: float | None
+    popularity_contribution: float
+    recency_contribution: float
+    score: float
+
+
+@dataclass(frozen=True, slots=True)
+class RankedCandidateSet:
+    """A shortlist; input exhaustion remains distinct from duration eligibility."""
+
+    target_id: str
+    candidates: tuple[RankedCandidate, ...]
+    reference_time_utc: datetime
+    config: RankingConfig
+    input_count: int
+    eligible_count: int
+    input_exhausted: bool
+
+    def __post_init__(self) -> None:
+        if (type(self.input_count) is not int or type(self.eligible_count) is not int
+                or not 0 <= self.eligible_count <= self.input_count <= UNSEEN_CANDIDATE_LIMIT):
+            raise ValueError("Ranking counts must describe a valid unseen candidate pool")
+        if (not isinstance(self.candidates, tuple)
+                or len(self.candidates) != min(RANKING_TOP_K, self.eligible_count)
+                or type(self.input_exhausted) is not bool):
+            raise ValueError("A ranked set requires an immutable, complete shortlist")
+        if (not isinstance(self.target_id, str) or not self.target_id.strip()
+                or any(not isinstance(item, RankedCandidate)
+                       or item.candidate.target_id != self.target_id
+                       for item in self.candidates)):
+            raise ValueError("Ranked candidates must belong to the result target")
