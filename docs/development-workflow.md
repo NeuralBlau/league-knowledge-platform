@@ -92,7 +92,7 @@ Before opening a PR, the agent runs applicable automated tests, linting, builds,
 
 Report the commands run, their results, and any failures, unavailable tooling, or checks not performed. Resolve findings before handing off, or clearly identify unresolved blockers. Never describe a planned or unrun check as passing.
 
-The repository currently contains documentation and no configured application test runner or CI workflow. Documentation changes require checking relative links, consistency with the scope and ADRs, and diff whitespace. As implementation and tooling are added, document and run the applicable automated checks. This process establishes review expectations; it does not itself install CI or configure branch protection.
+The repository contains Python acquisition components and offline unit/integration tests, run with `python -m unittest discover -s tests -v`. Install `requirements-transcripts.txt` to include the offline SDK adapter tests; without those optional dependencies, those tests explicitly skip. No CI workflow is currently configured. Documentation changes require checking Markdown/Mermaid rendering where applicable, relative links, consistency with the scope and ADRs, implemented/planned status, and diff whitespace. This process establishes review expectations; it does not itself install CI or configure branch protection.
 
 ## 5. Prepare the public pull request
 
