@@ -1,22 +1,136 @@
-# League Knowledge Platform
+# Agentic Knowledge Preparation for Multi-Hop Retrieval
 
-The League Knowledge Platform builds curated League of Legends knowledge for a voice-first AI coach. It discovers educational sources, integrates their content into a traceable Markdown Knowledge Wiki, and maintains a local retrieval index derived from that Wiki.
+This project investigates whether query-time latency in agentic multi-hop retrieval can be reduced by shifting part of the knowledge organization upstream into an agentic preparation process.
 
-## Status
+## Problem
 
-V1 is in planning and development. The architecture below describes the accepted direction, not a claim that the full pipeline is implemented.
+Complex multi-hop questions often require an agent to repeatedly retrieve information and reconstruct relationships between separate pieces of knowledge at query time. This flexibility comes at the cost of increased latency, tool usage and reasoning complexity.
 
-## V1 at a glance
+The underlying problem in agentic retrieval over large knowledge bases is therefore not only **how to retrieve relevant information**, but also **how much knowledge organization should happen before a query ever arrives** and **how this knowledge should be organized**.
 
-- A versioned local catalog targets all Champions for initial knowledge acquisition. Role-specific guidance and reusable concepts may emerge from the selected sources; V1 does not require a Champion × Role target matrix or systematic general-concept targets.
-- Manually initiated, resumable runs repeatedly seek new knowledge. Each logical run attempts the configured targets and integrates at most one newly selected source per target. No Champion is permanently complete.
-- For each target, collection seeks 20 unique unseen YouTube candidates where available and returns at most 20. Deterministic metadata ranking selects up to three eligible candidates, and their available English captions are acquired transiently. LLM comparison and selected-source Bronze admission will follow.
-- Silver cleans and segments selected material faithfully. A Knowledge Curator integrates it into Gold, the canonical, versioned Markdown Knowledge Wiki.
-- Local SQL stores operational progress and knowledge-change counts. An incremental local retrieval/vector index serves Gold. Azure is a possible future deployment target, not a V1 requirement.
+## Research Question
 
-See [V1 scope](docs/scope.md), [architecture](docs/architecture.md), and the [architecture decisions](docs/adr/001-medallion-architecture.md) for details. Dedicated Champion Matchup target acquisition and persistent cross-game user memory are outside initial V1 scope.
+This project explores whether part of that query-time complexity can be shifted upstream into knowledge preparation.
 
-This repository is part of the larger League AI Coach project.
+The core hypothesis is that unstructured source material can be processed in advance through multi-stage agentic knowledge curation and persisted in a more structured, relation-aware representation. For previously unseen multi-hop questions, this may reduce the number of retrieval and reasoning steps required at query time while preserving answer quality.
+
+## Experimental Domain
+
+League of Legends serves as the experimental domain rather than the primary technical purpose of the project. It provides a large, evolving body of semi-structured knowledge with strong cross-concept dependencies.
+
+## Approach
+
+The central idea is to move some interpretation and relationship-building work upstream into knowledge preparation. The following conceptual flow distinguishes implemented acquisition components from planned downstream stages; it is not a completed end-to-end pipeline.
+
+```mermaid
+flowchart TD
+    S["Unstructured Sources"] --> D
+    subgraph Current["Implemented acquisition components"]
+        D["Automated Source Discovery"]
+        F["Candidate Filtering and Ranking"]
+        T["Transient Transcript Acquisition"]
+        C["Integrated-source SQLite catalog"]
+        D --> F --> T
+        C -. "Read-only lookup" .-> F
+    end
+    subgraph Planned["Planned downstream preparation"]
+        L["LLM best-source selection"]
+        B["Bronze / Silver Processing"]
+        E["Multi-Stage Knowledge Extraction"]
+        V["Validation and Iterative Correction"]
+        I["Knowledge Integration"]
+        G["Structured Persistent Knowledge: Gold Markdown"]
+        R["Derived Retrieval Index"]
+        L --> B --> E --> V --> I --> G --> R
+    end
+    T --> L
+```
+
+LLM best-source selection remains the planned gate before Bronze: only the selected winner is admitted. Validation also gates the individual planned curation stages, as described below. Automated discovery refers to callable discovery components, not automatic scheduling or a delivered resumable-run orchestrator.
+
+## Current Implementation
+
+The repository currently implements acquisition through transient transcripts:
+
+| Implemented capability | Repository evidence |
+| --- | --- |
+| Versioned Champion target catalog and local validation/loading | [Catalog](data/champion_targets.json), [target loader](league_knowledge_platform/targets.py) |
+| Automated YouTube candidate discovery with metadata and continuation cursors | [Discovery](league_knowledge_platform/youtube.py) |
+| Persistent SQLite lookup and idempotent registration of successfully integrated source IDs | [Source catalog](league_knowledge_platform/source_catalog.py) |
+| Unseen-source filtering, refill, immutable integrated-ID snapshot, and cross-page deduplication preserving first-seen order | [Collection](league_knowledge_platform/unseen.py) |
+| Deterministic popularity/recency ranking, explicit reference time, and configurable duration eligibility through central defaults | [Ranking](league_knowledge_platform/ranking.py), [defaults](league_knowledge_platform/defaults.py) |
+| Transient acquisition of timestamped English YouTube captions, manual-English preference, and provider failure handling | [Acquisition](league_knowledge_platform/transcripts.py), [provider adapter](league_knowledge_platform/youtube_caption_provider.py) |
+| Centralized non-secret service defaults and offline unit/integration tests using fakes and synthetic HTTP fixtures | [Defaults](league_knowledge_platform/defaults.py), [tests](tests/) |
+
+Collection returns at most 20 unique unseen candidates. Duration is an eligibility filter only; popularity and recency determine ranking. The shortlist contains 0–3 candidates. Caption unavailability is candidate-level and non-fatal; technical provider failures fail the operation without returning a successful partial transcript set.
+
+The source catalog capability does **not** mean Bronze persistence exists. Its later integration caller must register a selected source only after successful Bronze persistence. Discovered, ranked, rejected candidates and acquired transcripts are not persisted by these acquisition components.
+
+The platform as a whole remains in development. LLM best-source selection, Bronze/Silver processing, agentic curation, the Deterministic Writer, Gold storage, retrieval indexing, and resumable-run orchestration are planned, not delivered functionality. The fixed-size baseline and comparative evaluation are also not implemented.
+
+## Planned Agentic Knowledge Curation
+
+The planned curator has two logical AI stages, **Knowledge Extraction** and **Knowledge Integration**, followed by a **Deterministic Writer**. This explains the intended curation inside the accepted Knowledge Platform architecture; it does not introduce a replacement architecture or claim that these agents already exist.
+
+Knowledge Extraction is planned as:
+
+`SEGMENT → VALIDATE → EXTRACT → VALIDATE → AUDIT/REFINE → VALIDATE → Knowledge Items`
+
+The governing principle is **Agent → Artifact → External Validation → Feedback → Agent**:
+
+```mermaid
+flowchart LR
+    A["Agent"] --> B["Structured Artifact"]
+    B --> V["External Validation"]
+    V -- "Fail: structured feedback" --> F["Feedback"]
+    F --> A
+    V -- "Pass" --> N["Progress to next stage"]
+```
+
+Agents produce structured intermediate artifacts. Explicit validators outside the generating agent's decision determine stage pass/fail. Failed validation returns structured feedback for corrective iteration; progression occurs only after validation succeeds. Validation is a control mechanism, not a guarantee of factual correctness.
+
+Knowledge Integration inspects relevant existing Gold knowledge and proposes governed changes while preserving provenance and contradictions. Planned operations are `NO_CHANGE`, `CREATE`, `ENRICH`, `REWRITE`, `MERGE`, `LINK`, and `FLAG_CONFLICT`. The Deterministic Writer applies validated, approved state changes. V1 excludes autonomous destructive deletion. Agent frameworks, artifact schemas, and validator implementations remain future technical design work.
+
+## Experimental Evaluation
+
+The hypothesis remains unproven. The planned experiment compares conventional fixed-size chunking plus retrieval with agentically prepared, more structured knowledge. Both paths will use the **same source material** and the **same previously unseen multi-hop questions**. Neither approach is assumed to outperform the other.
+
+The fixed-size chunking baseline still needs to be implemented. Query-time comparison and full evaluation also follow later; neither is implemented yet.
+
+| Planned evaluation category | Dimensions |
+| --- | --- |
+| Answer quality | Correctness, completeness, groundedness, answer relevance |
+| Retrieval quality | Relevant-information recall, retrieval precision, source coverage |
+| Query-time efficiency | End-to-end latency, retrieval calls, tool calls, reasoning steps |
+| Knowledge preparation | Preparation cost, agent iterations, validation failures, knowledge changes per source, marginal knowledge gain |
+
+The central evaluation question is: **Does additional work during knowledge preparation reduce query-time complexity and latency without sacrificing answer quality?** No comparative results or latency reduction have yet been demonstrated. The [conceptual evaluation diagram](docs/architecture.md#planned-comparative-evaluation) supplements the existing architecture.
+
+## Architecture Principles
+
+- **Local-first V1:** Local artifacts and stores, with external source/search and LLM APIs where required. Azure remains a possible future deployment target.
+- **Traceable medallion layers:** Planned Bronze retains selected raw sources; Silver remains source-faithful; Gold is the canonical, adaptive Markdown Knowledge Wiki with provenance and visible contradictions.
+- **Derived retrieval:** The planned local retrieval index is derived from Gold and synchronized incrementally. A relation-aware representation does not require a new graph database or fixed Gold ontology.
+- **Controlled integration:** Transient candidates remain unpersisted; planned curation validates proposed changes before deterministic application.
+- **Human-supervised development:** Versioned plans, human design approval, validation, and human PR review/merge follow the [development workflow](docs/development-workflow.md).
+
+See [V1 scope](docs/scope.md), [architecture](docs/architecture.md), and the [architecture decisions](docs/adr/001-medallion-architecture.md) for the accepted design and its history.
+
+## Roadmap / Status
+
+| Status | Work |
+| --- | --- |
+| Implemented | Champion targets, discovery, integrated-source lookup, unseen collection, ranking, and transient transcripts with offline tests |
+| In development | Knowledge Platform overall; acquisition components exist, but the full acquisition/curation pipeline is incomplete |
+| Planned next | LLM best-source selection, then selected-source Bronze and source-faithful Silver processing |
+| Planned subsequent | Validated agentic curation, Deterministic Writer, canonical Gold, incremental retrieval index, resumable runs, and raw knowledge-change metrics |
+| Planned evaluation | Fixed-size baseline, query-time comparison, and quality/efficiency/preparation measurements |
+
+The accepted V1 design calls for manually initiated, resumable runs across the Champion catalog, integrating at most one newly selected source per target per logical run. No Champion is permanently complete. Role-specific and reusable knowledge may emerge from sources; a Champion × Role matrix is not required. Dedicated Matchup targets and persistent cross-game user memory remain outside initial V1 scope. A separate League AI Coach may later consume the prepared knowledge.
+
+## Usage and Development
+
+The following APIs are implemented acquisition components. The examples perform live source access only where explicitly indicated; offline tests use injected responses.
 
 ## Champion target loading and YouTube discovery
 
