@@ -4,7 +4,10 @@ import inspect
 import unittest
 from unittest.mock import patch
 
-from league_knowledge_platform import DEFAULT_RANKING_CONFIG, DEFAULT_TRANSCRIPT_CONFIG, YouTubeDiscovery
+from league_knowledge_platform import (
+    DEFAULT_RANKING_CONFIG, DEFAULT_SELECTION_CONFIG, DEFAULT_TRANSCRIPT_CONFIG,
+    DeepSeekSelectionConfig, YouTubeDiscovery,
+)
 from league_knowledge_platform import defaults, models
 
 
@@ -30,6 +33,16 @@ class DefaultsTests(unittest.TestCase):
                          defaults.TRANSCRIPT_READ_TIMEOUT_SECONDS)
         self.assertEqual(defaults.TRANSCRIPT_MAX_RETRIES, 0)
         self.assertEqual(defaults.TRANSCRIPT_ENGLISH_LOCALE_PREFERENCE, ("en", "en-us", "en-gb"))
+        selection = DeepSeekSelectionConfig()
+        self.assertEqual(selection.model, defaults.SELECTION_MODEL)
+        self.assertEqual(selection.quality_output_limit, defaults.SELECTION_QUALITY_OUTPUT_LIMIT)
+        self.assertEqual(selection.comparison_output_limit, defaults.SELECTION_COMPARISON_OUTPUT_LIMIT)
+        self.assertEqual(selection.connect_timeout_seconds, defaults.SELECTION_CONNECT_TIMEOUT_SECONDS)
+        self.assertEqual(selection.read_timeout_seconds, defaults.SELECTION_READ_TIMEOUT_SECONDS)
+        self.assertEqual(selection.max_response_bytes, defaults.SELECTION_MAX_RESPONSE_BYTES)
+        self.assertEqual(DEFAULT_SELECTION_CONFIG.max_attempts, defaults.SELECTION_MAX_ATTEMPTS)
+        self.assertEqual(DEFAULT_SELECTION_CONFIG.retry_delays_seconds,
+                         defaults.SELECTION_RETRY_DELAYS_SECONDS)
 
     def test_discovery_still_uses_runtime_key_with_central_nonsecret_defaults(self):
         class Transport:

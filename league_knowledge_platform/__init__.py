@@ -27,8 +27,28 @@ from .unseen import (
     collect_unseen_candidates,
 )
 from .youtube import DiscoveryError, DiscoveryFailureKind, YouTubeDiscovery
+from .selection_models import (
+    CandidateQualityAssessment, ComparativeCandidateAssessment, ComparativeSelection,
+    ComparativeSelectionRequest, NoSelection, NoSelectionReason, QualityAssessmentBatch,
+    QualityAssessmentRequest, QualityGateResult, QualityReasonCode, SelectedSource,
+    SelectionAttempt, SelectionFailed, SelectionFailureKind, SelectionMethod, SelectionStage,
+    SelectionStatus, SemanticCallMetadata, SemanticCandidate, SourceSelectionOutcome,
+)
+from .source_selection import (
+    DEFAULT_SELECTION_CONFIG, SelectionCapabilityError, SelectionConfig,
+    SourceSelectionCapability, select_source,
+)
+from .deepseek_selection import DeepSeekSelectionAdapter, DeepSeekSelectionConfig
 
 __all__ = [
+    "CandidateQualityAssessment", "ComparativeCandidateAssessment", "ComparativeSelection",
+    "ComparativeSelectionRequest", "DEFAULT_SELECTION_CONFIG", "DeepSeekSelectionAdapter",
+    "DeepSeekSelectionConfig", "NoSelection", "NoSelectionReason", "QualityAssessmentBatch",
+    "QualityAssessmentRequest", "QualityGateResult", "QualityReasonCode", "SelectedSource",
+    "SelectionAttempt", "SelectionCapabilityError", "SelectionConfig", "SelectionFailed",
+    "SelectionFailureKind", "SelectionMethod", "SelectionStage", "SelectionStatus",
+    "SemanticCallMetadata", "SemanticCandidate", "SourceSelectionCapability",
+    "SourceSelectionOutcome", "select_source",
     "CaptionKind",
     "CaptionProvider",
     "CaptionProviderError",
