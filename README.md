@@ -16,41 +16,73 @@ The core hypothesis is that unstructured source material can be processed in adv
 
 ## Experimental Domain
 
-League of Legends serves as the experimental domain rather than the primary technical purpose of the project. It provides a large, evolving body of semi-structured knowledge with strong cross-concept dependencies.
+To investigate this hypothesis, League of Legends was selected as the experimental domain. It provides a complex and continuously evolving body of knowledge with many interconnected concepts, while a large part of the available expertise exists in unstructured public sources such as educational videos.
+
+This makes the domain useful for studying knowledge preparation: relevant information may be distributed across different sources, multiple sources may cover the same Champion or concept, and new sources may add details without replacing what is already known. Multi-hop questions may require connecting Champion mechanics, situational context, and strategic decisions across these sources.
+
+League of Legends therefore serves as the experimental domain rather than the primary technical purpose of the project.
 
 ## Approach
 
-The central idea is to move some interpretation and relationship-building work upstream into knowledge preparation. The following conceptual flow distinguishes implemented acquisition components from planned downstream stages; it is not a completed end-to-end pipeline.
+The project does not start from a pre-structured knowledge base. Its preparation pipeline is intended to build and evolve knowledge from public unstructured source material, moving some interpretation and relationship-building work upstream. A structured target catalog identifies what to acquire; it is not the knowledge corpus.
+
+The implemented **Source Acquisition** components discover and select source material. **Agentic Knowledge Curation** and **Experimental Evaluation** remain separate planned stages described below. This is not a completed end-to-end acquisition/curation system.
+
+### Data Sources
+
+| Source | Role |
+| --- | --- |
+| **Riot Games Data Dragon** | Establishes the authoritative Champion target catalog / target universe. The versioned catalog is committed locally and loaded without a runtime Riot request. It is structured target data, not the main knowledge corpus. |
+| **YouTube** | V1 public source pool for educational knowledge contained primarily in unstructured video/transcript content. Discovery also supplies structured video metadata used for candidate collection and ranking. |
+
+### Source Acquisition
 
 ```mermaid
 flowchart TD
-    S["Unstructured Sources"] --> D
-    subgraph Current["Implemented acquisition components"]
-        D["Automated Source Discovery"]
-        F["Candidate Filtering and Ranking"]
-        T["Transient Transcript Acquisition"]
-        C["Integrated-source SQLite catalog"]
-        D --> F --> T
-        C -. "Read-only lookup" .-> F
-    end
-    subgraph Planned["Planned downstream preparation"]
-        L["LLM best-source selection"]
-        B["Bronze / Silver Processing"]
-        E["Multi-Stage Knowledge Extraction"]
-        V["Validation and Iterative Correction"]
-        I["Knowledge Integration"]
-        G["Structured Persistent Knowledge: Gold Markdown"]
-        R["Derived Retrieval Index"]
-        L --> B --> E --> V --> I --> G --> R
-    end
-    T --> L
+    T["Knowledge Target: Champion"] --> D["YouTube Source Discovery"]
+    D --> U["Unseen Candidate Filtering and Refill"]
+    C["Integrated-source Catalog"] -. "Read-only snapshot" .-> U
+    U --> R["Duration Eligibility and Metadata Ranking"]
+    R --> A["Transient Transcript Acquisition"]
+    A --> Z{"Successful transcripts available?"}
+    Z -- "No" --> N["NO_SELECTION"]
+    Z -- "Yes" --> Q["Stage 1: Absolute Semantic Quality Assessment"]
+    Q --> S["Validated Structured Quality Assessments"]
+    S --> G["Deterministic Quality Gate"]
+    G --> P{"Passing candidates"}
+    P -- "0 PASS" --> N
+    P -- "1 PASS: direct selection" --> W["Selected Source"]
+    P -- "2–3 PASS" --> L["Stage 2: Separate Comparative LLM Selection"]
+    L -- "Validated winner" --> W
+    Q -. "Technical failure after allowed attempts" .-> F["SELECTION_FAILED"]
+    L -. "Technical failure after allowed attempts" .-> F
 ```
 
-LLM best-source selection remains the planned gate before Bronze: only the selected winner is admitted. Validation also gates the individual planned curation stages, as described below. Automated discovery refers to callable discovery components, not automatic scheduling or a delivered resumable-run orchestrator.
+Stage 1 assesses each available transcript independently against an absolute minimum standard. The flow is **LLM semantic judgement → structured assessment → deterministic application rules → PASS / REJECT**. Application code derives PASS only when `target_relevant`, `educational_substance`, and `transcript_usable` are true and `noise_dominates` is false. The LLM does not return the final gate decision.
+
+Zero passing candidates produces normal `NO_SELECTION`. One is selected directly, without a comparative call. Two or three invoke a separate relative comparison to select the strongest passing source. Stage 2 receives no Stage-1 assessments, booleans, reason codes, or rationales. Neither semantic stage receives popularity, recency, ranking scores, discovery order, or original shortlist rank; explicit request allowlists preserve this boundary.
+
+Selection uses full available transcript text and retains the original candidate identity and segment timing/provenance internally. An empty acquired set produces `NO_SELECTION` without an LLM call. A technical selection failure produces `SELECTION_FAILED`, never a fallback winner or normal no-selection. Technical caption-acquisition failures abort before source selection. Only a successfully selected source is eligible for later Bronze processing; that persistence is not implemented yet.
+
+Automated discovery refers to callable components. Manually initiated resumable-run orchestration and automatic scheduling are not delivered by these components; scheduling remains outside V1.
+
+### Incremental Source Acquisition
+
+Repeated acquisition is intended to find additional previously unseen sources for the same Champion. The integrated-source lookup and filtering are implemented; complete resumable runs, Bronze persistence, and subsequent knowledge integration remain planned. The following conceptual example assumes successful future Bronze persistence and catalog registration after each selected source:
+
+| Logical run | Example |
+| --- | --- |
+| Run 1 | Source A is selected, then successfully persisted to Bronze and registered as integrated. |
+| Run 2 | Integrated Source A is excluded; Source B may be selected and later registered after successful Bronze persistence. |
+| Run 3 | Integrated Sources A and B are excluded; Source C may be selected. |
+
+**Selected does not mean integrated.** Discovery, ranking, quality assessment, and selection do not register sources. A later caller registers a source only after successful Bronze persistence. Unselected or rejected candidates are not added to the catalog by acquisition.
+
+An additional source does not necessarily contribute useful new knowledge. Planned curation may create knowledge, enrich existing knowledge, find overlap, flag conflicts, or make `NO_CHANGE`. It will evolve the existing Gold knowledge rather than rebuild an independent knowledge base for every source. Reusable concepts may emerge from Champion sources; systematic concept-target acquisition remains future scope.
 
 ## Current Implementation
 
-The repository currently implements acquisition through transient transcripts:
+The repository currently implements Source Acquisition through transient source-selection outcomes:
 
 | Implemented capability | Repository evidence |
 | --- | --- |
@@ -60,17 +92,21 @@ The repository currently implements acquisition through transient transcripts:
 | Unseen-source filtering, refill, immutable integrated-ID snapshot, and cross-page deduplication preserving first-seen order | [Collection](league_knowledge_platform/unseen.py) |
 | Deterministic popularity/recency ranking, explicit reference time, and configurable duration eligibility through central defaults | [Ranking](league_knowledge_platform/ranking.py), [defaults](league_knowledge_platform/defaults.py) |
 | Transient acquisition of timestamped English YouTube captions, manual-English preference, and provider failure handling | [Acquisition](league_knowledge_platform/transcripts.py), [provider adapter](league_knowledge_platform/youtube_caption_provider.py) |
+| Absolute semantic quality assessment, deterministic PASS / REJECT, direct or comparative selection, and explicit no-selection/technical-failure outcomes | [Selection service](league_knowledge_platform/source_selection.py), [domain contracts](league_knowledge_platform/selection_models.py) |
+| Separate allowlisted semantic requests, configurable DeepSeek adapter, and at most three attempts per semantic stage | [DeepSeek adapter](league_knowledge_platform/deepseek_selection.py), [versioned prompts](league_knowledge_platform/selection_prompts.py) |
 | Centralized non-secret service defaults and offline unit/integration tests using fakes and synthetic HTTP fixtures | [Defaults](league_knowledge_platform/defaults.py), [tests](tests/) |
 
 Collection returns at most 20 unique unseen candidates. Duration is an eligibility filter only; popularity and recency determine ranking. The shortlist contains 0–3 candidates. Caption unavailability is candidate-level and non-fatal; technical provider failures fail the operation without returning a successful partial transcript set.
 
 The source catalog capability does **not** mean Bronze persistence exists. Its later integration caller must register a selected source only after successful Bronze persistence. Discovered, ranked, rejected candidates and acquired transcripts are not persisted by these acquisition components.
 
-The platform as a whole remains in development. LLM best-source selection, Bronze/Silver processing, agentic curation, the Deterministic Writer, Gold storage, retrieval indexing, and resumable-run orchestration are planned, not delivered functionality. The fixed-size baseline and comparative evaluation are also not implemented.
+The platform as a whole remains in development. Bronze/Silver processing, agentic curation, the Deterministic Writer, Gold storage, retrieval indexing, and resumable-run orchestration are planned, not delivered functionality. The fixed-size baseline and comparative evaluation are also not implemented. Implemented selection and its offline tests do not demonstrate live provider availability, semantic model quality, or the research hypothesis.
 
 ## Planned Agentic Knowledge Curation
 
 The planned curator has two logical AI stages, **Knowledge Extraction** and **Knowledge Integration**, followed by a **Deterministic Writer**. This explains the intended curation inside the accepted Knowledge Platform architecture; it does not introduce a replacement architecture or claim that these agents already exist.
+
+Its planned flow is **Selected Source → Transcript Processing → Agentic Knowledge Extraction → Existing-Knowledge Inspection → Knowledge Integration → Updated Structured Knowledge Base**. Bronze retains the selected raw source; Silver performs source-faithful transcript processing. External validation gates progression and deterministic code applies approved changes to existing Gold. See the separate [planned curation architecture](docs/architecture.md#knowledge-layers-and-curator).
 
 Knowledge Extraction is planned as:
 
@@ -120,9 +156,9 @@ See [V1 scope](docs/scope.md), [architecture](docs/architecture.md), and the [ar
 
 | Status | Work |
 | --- | --- |
-| Implemented | Champion targets, discovery, integrated-source lookup, unseen collection, ranking, and transient transcripts with offline tests |
+| Implemented | Champion targets, discovery, integrated-source lookup, unseen collection, ranking, transient transcripts, absolute quality assessment, deterministic gating, and conditional comparative selection with offline tests |
 | In development | Knowledge Platform overall; acquisition components exist, but the full acquisition/curation pipeline is incomplete |
-| Planned next | LLM best-source selection, then selected-source Bronze and source-faithful Silver processing |
+| Planned next | Selected-source Bronze and source-faithful Silver processing |
 | Planned subsequent | Validated agentic curation, Deterministic Writer, canonical Gold, incremental retrieval index, resumable runs, and raw knowledge-change metrics |
 | Planned evaluation | Fixed-size baseline, query-time comparison, and quality/efficiency/preparation measurements |
 
@@ -205,7 +241,7 @@ For eligible candidates, popularity is `ln(1 + views) / ln(1 + maximum eligible 
 
 The score is 70% popularity plus 30% recency, rounded to 12 decimal places. Missing views or publication dates remain absent and contribute zero; the other signal's weight is not increased. Equal final scores preserve the original collection/discovery order. This is a metadata funnel, not a judgment of educational or semantic quality.
 
-The output contains exactly `min(3, eligible_count)` entries, including none when every video is excluded. Each entry retains the original `CandidateVideo` object, discovery index, both normalized signals, their contributions, and final score. The set records the UTC reference time, immutable scoring configuration, input and eligible counts, and `input_exhausted` from collection. An empty shortlist does not imply search exhaustion or cause discovery/refill. The ranker makes no network, filesystem, or database calls, and does not register sources or persist candidates. Transcript acquisition is the separate stage below; semantic source selection remains future work.
+The output contains exactly `min(3, eligible_count)` entries, including none when every video is excluded. Each entry retains the original `CandidateVideo` object, discovery index, both normalized signals, their contributions, and final score. The set records the UTC reference time, immutable scoring configuration, input and eligible counts, and `input_exhausted` from collection. An empty shortlist does not imply search exhaustion or cause discovery/refill. The ranker makes no network, filesystem, or database calls, and does not register sources or persist candidates. Transcript acquisition and semantic source selection are separate downstream components, described below.
 
 Non-secret tunable defaults are centrally discoverable in `league_knowledge_platform/defaults.py`: duration bounds, Top-K, scoring weights, recency half-life, score precision, the existing unseen limit, and discovery page size/timeout. `RankingConfig` consumes the scoring defaults and can be supplied explicitly for reproducible evaluation; it requires positive weights summing to one with popularity stronger than recency. Eligibility limits and Top-K come from the central service defaults. Existing discovery settings retain their established values and override behavior. Secrets such as `YOUTUBE_API_KEY` remain environment/runtime configuration and never belong in the defaults module.
 
@@ -253,3 +289,17 @@ python -m unittest discover -s tests -v
 ```
 
 The real SDK tests use synthetic responses through the public HTTP adapter boundary and never fall back to live YouTube. Without the optional dependencies, SDK adapter tests explicitly skip; the existing components and fake-provider acquisition tests remain available. Synthetic fixture text is test data, not persisted acquired candidate content.
+
+## Source quality assessment and selection
+
+`select_source(target, transcripts, capability=...)` consumes a successful `TransientTranscriptSet` and an explicit `ChampionTarget`. `SourceSelectionCapability` separates absolute quality assessment from comparative selection. `DeepSeekSelectionAdapter` is the concrete V1 provider; install its optional HTTP dependencies with `python -m pip install -r requirements-selection.txt`.
+
+Provide `DEEPSEEK_API_KEY` through the environment or explicit runtime injection. `DEEPSEEK_MODEL` may override the central default model; an explicit `DeepSeekSelectionConfig` is also supported. Secrets never belong in defaults. The adapter uses non-thinking inference, temperature 0, JSON output, bounded response sizes, and local schema validation. These settings do not guarantee deterministic or correct semantic judgments.
+
+| Result | Meaning |
+| --- | --- |
+| `SelectedSource` / `SELECTED` | Exactly one passing source, with the original transcript, identity, timing, gate results, and comparison artifact when applicable. |
+| `NoSelection` / `NO_SELECTION` | No acquired transcripts or a completed quality gate that rejected every candidate. |
+| `SelectionFailed` / `SELECTION_FAILED` | Technical/model failure prevented selection; no winner is returned. |
+
+The selection service owns retries: at most three total attempts per semantic stage reuse unchanged inputs. A comparative-stage failure does not repeat successful quality assessment or restart discovery, collection, ranking, or transcript acquisition. The outputs and assessments remain transient, with no Bronze writes or source-catalog mutation. Offline domain, synthetic HTTP, and ranker/caption/selection integration tests are included in the existing test command. Installing both optional requirements files includes the caption and selection adapter coverage; without their respective dependencies, those adapter tests explicitly skip.
