@@ -1,3 +1,4 @@
 /.state/
+/data/bronze/
 __pycache__/
 *.py[cod]

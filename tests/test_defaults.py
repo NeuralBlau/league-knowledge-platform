@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from league_knowledge_platform import (
+    DEFAULT_BRONZE_CONFIG,
     DEFAULT_RANKING_CONFIG, DEFAULT_SELECTION_CONFIG, DEFAULT_TRANSCRIPT_CONFIG,
     DeepSeekSelectionConfig, YouTubeDiscovery,
 )
@@ -13,6 +14,7 @@ from league_knowledge_platform import defaults, models
 
 class DefaultsTests(unittest.TestCase):
     def test_service_defaults_are_discoverable_and_keep_existing_contracts(self):
+        self.assertEqual(DEFAULT_BRONZE_CONFIG.root, defaults.BRONZE_ROOT)
         self.assertEqual(defaults.MIN_VIDEO_DURATION_SECONDS, 180)
         self.assertEqual(defaults.MAX_VIDEO_DURATION_SECONDS, 1800)
         self.assertEqual(defaults.RANKING_TOP_K, 3)
