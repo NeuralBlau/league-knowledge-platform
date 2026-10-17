@@ -1,6 +1,6 @@
 # Development workflow
 
-Development is human-supervised: agents prepare plans, implement approved changes, validate their work, and explain the result. Humans approve the design and retain final pull-request review and merge authority.
+Development is human-supervised: agents prepare plans, implement approved changes, validate their work, and obtain independent AI PR review before handing off a successful result. Humans approve the design and retain final pull-request review and manual merge authority. Implementation self-review and independent AI review are separate gates.
 
 ## Requirements and public documentation
 
@@ -42,8 +42,26 @@ flowchart TD
     I -- "Yes: stop affected work" --> E
     I -- "No" --> J["Applicable validation and complete diff self-review"]
     J --> K["Public pull request"]
-    K --> L["Human review"]
-    L --> M["Human merge"]
+    K --> BUD{"Review cycles used < 3?"}
+    BUD -- "No; no current-HEAD PASS" --> ESC["Stop automation; escalate findings to human"]
+    BUD -- "Yes" --> AV{"Independent reviewer available?"}
+    AV -- "No" --> IR["INDEPENDENT REVIEW REQUIRED; stop"]
+    AV -- "Yes" --> REV["Fresh independent context; complete PR review; count cycle"]
+    REV --> MAT{"Material plan change required?"}
+    MAT -- "Yes" --> PLAN["PLAN REVISION REQUIRED; stop affected work"]
+    PLAN --> E
+    MAT -- "No" --> RESULT{"Review result"}
+    RESULT -- "CHANGES_REQUIRED" --> MORE{"Review cycles used < 3?"}
+    MORE -- "No" --> ESC
+    MORE -- "Yes" --> FIX["Assess findings; fix valid issues within approved plan"]
+    FIX --> VALID["Relevant validation; commit and push"]
+    VALID --> BUD
+    RESULT -- "PASS" --> SHA{"Reviewed SHA equals current PR HEAD?"}
+    SHA -- "No: previous PASS invalid" --> BUD
+    SHA -- "Yes" --> READY["Ready for Human Review"]
+    READY --> L["Human review"]
+    L --> M["Manual human merge"]
+    L -- "New commit: invalidate PASS" --> BUD
 ```
 
 For an explicitly allowed narrow-change exception, the full plan is omitted, but Requirement Quality Review and applicable human authorization still precede implementation.
@@ -96,7 +114,7 @@ The repository contains Python acquisition components and offline unit/integrati
 
 ## 5. Prepare the public pull request
 
-The default delivery for completed PBI work is to commit the validated changes, push the dedicated PBI branch, and open a PR using the [PR template](../.github/pull_request_template.md). Give the human reviewer the PR link and leave final review and merge to them. Honor explicit local-only, no-commit, or no-push instructions: provide the local diff and validation results and stop at that delivery boundary.
+The default delivery is to commit the validated changes, push the dedicated PBI branch, and open a PR using the [PR template](../.github/pull_request_template.md). PR creation initiates independent AI review; it does not complete the implementation workflow. Report the PR as pending independent review until the gate below passes. Honor explicit local-only, no-commit, or no-push instructions: provide the local diff and validation results and stop at that delivery boundary without claiming independent PR review passed.
 
 The public PR description should stand on its own and include:
 
@@ -108,8 +126,68 @@ The public PR description should stand on its own and include:
 
 Summarize criteria rather than copying private Azure DevOps text. If a criterion cannot be disclosed publicly, state that its validation evidence is available to the authorized human reviewer in the private planning context. Do not imply that public summaries replace the authoritative criteria. Avoid internal URLs, detailed private plans, discussion transcripts, and credentials.
 
-## 6. Human PR review and merge
+## 6. Independent AI PR review
+
+The implementation agent obtains a fresh Codex reviewer/subagent or independently triggered Codex review context after opening the PR. Every cycle uses a new context without inherited implementation conversation, defensive arguments, or implementation self-review conclusions. Native delegation is sufficient; this workflow does not install CI, GitHub Actions, an external orchestrator, or an API integration. These are repository instructions, not an enforced GitHub merge check.
+
+### Reviewer inputs and responsibilities
+
+Supply a neutral review packet, and require the reviewer to read:
+
+- The latest authoritative PBI description and all acceptance criteria, with its revision identified.
+- The explicitly human-approved Technical Implementation Plan version and approval evidence. Where the existing narrow-change exception was expressly authorized, include that authorization instead; AI review creates no new exception.
+- Repository rules including `AGENTS.md`, relevant scope/architecture decisions, and any applicable local instructions.
+- The PR identity, base, exact current HEAD commit SHA, complete PR diff, and relevant existing implementation and tests. Review the whole PR, not only the newest commit or previous findings.
+
+Keep private requirements, plans, and detailed evidence in the authorized private task context. Do not include credentials in the packet or publish private artifacts. Missing authoritative inputs prevent a valid PASS; report the limitation rather than inventing requirements. The PR description and implementation validation claims are not substitutes for independent inspection.
+
+The reviewer checks acceptance-criteria and approved-plan compliance, correctness, architecture boundaries, unintended scope changes, regression risk, test coverage, relevant security and secret handling, repository conventions, maintainability, and obvious defects. It may inspect files/diffs and run useful checks/tests. It must not edit implementation or repository files, commit, push, approve or merge the PR, change product requirements, or approve material architecture deviations. The reviewer role ends with its report; it does not perform remediation or initiate a nested review loop. The implementation agent avoids concurrent edits during review so the checked-out files match the reviewed commit.
+
+### Review result
+
+Require this structured result, with the full reviewed HEAD SHA:
+
+```text
+AI PR REVIEW
+reviewed_commit: <PR HEAD SHA>
+status: PASS | CHANGES_REQUIRED
+
+findings:
+- severity: BLOCKER | MAJOR | MINOR
+  requirement_or_plan: <affected reference, where applicable>
+  location: <file and relevant location>
+  issue: <problem>
+  evidence: <supporting observation or check>
+  required_change: <actionable correction>
+```
+
+Use `findings: []` when there are no findings. PASS requires no unresolved BLOCKER or MAJOR findings. Disclose remaining MINOR findings even when the result is PASS. A missing, incomplete, or unbound report cannot establish the gate. The implementation agent cannot turn its own self-review or a disputed major finding into independent PASS.
+
+The full reviewer report is the authoritative review artifact in the private task context. Keep a compact publication-safe summary in the PR's AI-review section: reviewed HEAD, status, cycles used, unresolved findings, and readiness for human review. Update the PR description without creating a repository commit merely to record review status. Do not copy private requirement or plan content into that summary.
+
+## 7. Remediation, limits, and blocked review
+
+On `CHANGES_REQUIRED`, first check for material changes and the remaining cycle budget. If three cycles have already been used, stop automatic remediation and escalate as described below. Otherwise, the implementation agent:
+
+1. Examines each finding against the authoritative requirements and approved plan.
+2. Fixes valid findings within approved scope and adds or updates tests where appropriate. Records evidence for any disputed finding; does not silently dismiss unresolved BLOCKER or MAJOR findings.
+3. Reruns relevant validation and self-reviews the changes, then commits and pushes fixes to the same PR.
+4. Obtains a fresh independent reviewer for the new HEAD. That reviewer reads the complete current PR against the authoritative inputs, not merely the previous findings or corrective diff.
+
+Track at most **three independent AI review cycles per PR** in the private task context. Increment the count when a fresh review is dispatched; a dispatched review whose result becomes stale or unusable still consumes a cycle. Commits, remediation, or a revised plan do not reset the count. Before dispatch, check that the count is below three. If no valid PASS for current HEAD exists after the third cycle, stop automatic remediation and review, report current HEAD and remaining findings/limitations, and escalate to a human. Escalation is not `Ready for Human Review` under a passed gate and does not authorize merge. Never create an unbounded agent-to-agent loop.
+
+If a finding requires a material product-behavior, architecture, scope, or approved-plan change, stop affected work with `PLAN REVISION REQUIRED`. Explain the finding and why the current plan cannot satisfy it; propose the next explicitly versioned plan (`v2`, then `v3`, etc.). Obtain explicit human approval before implementation resumes. Independent AI review cannot bypass Requirement Quality Review, plan-version identification, human design approval, or renewed material-change approval.
+
+If spawning/delegation or an independent Codex context is unavailable, report `INDEPENDENT REVIEW REQUIRED`, the PR, exact current HEAD, and the limitation. Preserve validation and self-review evidence and stop before claiming successful workflow completion. A separately initiated independent review may later satisfy the gate subject to the same inputs, HEAD binding, and remaining cycle budget. Missing required reviewer inputs or an unusable report likewise require an explicit blocked-review handoff, not fabricated PASS.
+
+## 8. Current-HEAD gate and handoff
+
+Record the full PR HEAD before review and re-read it before successful human-review handoff. `reviewed_commit` must equal current PR HEAD. A PASS for commit A does not apply after commit B is pushed, including documentation-only fixes or changes requested during human review. Mark the old summary stale and require a fresh complete review of B within the remaining budget; if the budget is exhausted, stop and escalate. Verify the workspace represents the reviewed commit; dirty or changing files cannot establish current-HEAD PASS.
+
+Only a valid independent PASS for the exact current HEAD establishes **Ready for Human Review**. Stop implementation activity and give the human the PR, HEAD, review-cycle count, result, remaining MINOR findings, validation limitations, and follow-up work. AI PASS is not final PR approval or merge permission.
+
+## 9. Human PR review and merge
 
 A human performs the final PR review, checks the result against the authoritative acceptance criteria and validation evidence, and decides whether to merge. Agent self-review and passing automated checks support this decision; they do not replace it. Agents must not approve their own PRs or merge them.
 
-Address review feedback and rerun checks affected by subsequent changes. Return material scope or design changes to the earlier approval gate. Humans retain control over merge and work-item completion; agents update Azure DevOps only when explicitly authorized.
+Address review feedback and rerun checks affected by subsequent changes. Any new commit invalidates previous AI PASS and returns to the current-HEAD gate within the same three-cycle budget. Return material scope or design changes to the earlier approval gate. Humans retain control over merge and work-item completion; agents update Azure DevOps only when explicitly authorized.
