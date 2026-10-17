@@ -12,7 +12,7 @@ The architecture has three separate views. Source Acquisition is implemented thr
 | [Agentic Knowledge Curation](#knowledge-layers-and-curator) | Planned Bronze/Silver processing, extraction, external validation, existing-knowledge inspection, integration, deterministic writing, and Gold |
 | [Experimental Evaluation](#planned-comparative-evaluation) | Planned fixed-size baseline and quality/query-time-efficiency comparison |
 
-Manually initiated resumable-run orchestration remains planned. The implemented SQLite catalog covers integrated IDs, not all future operational SQL responsibilities. The platform is not yet a completed end-to-end acquisition/curation system.
+Manually initiated sequential run orchestration is implemented through source selection, with its own SQLite progress database and immutable target snapshots. The integrated-source catalog remains separate. Bronze persistence, curation and other future operational SQL responsibilities are not delivered by run progress. The platform is not yet a completed end-to-end acquisition/curation system.
 
 ## Source Acquisition
 
@@ -40,9 +40,9 @@ flowchart TD
     W -. "Future persistence boundary" .-> B["Planned Bronze processing"]
 ```
 
-The initial target catalog lists all Champions without enumerating Champion × Role combinations. Planned run orchestration will attempt every configured target, resume across batches/sessions, and integrate at most one new selected source per target per logical run. A Champion is never permanently complete. Role-specific and reusable general knowledge can emerge from content; systematic general-concept acquisition remains future scope.
+The initial target catalog lists all Champions without enumerating Champion × Role combinations. Run orchestration attempts every original target, resumes across sessions, and records at most one selected source per target/run. Actual integration remains downstream of selection. A Champion is never permanently complete. Role-specific and reusable general knowledge can emerge from content; systematic general-concept acquisition remains future scope.
 
-For each target, collection seeks 20 unique unseen candidates and returns at most 20, refilling after integrated-ID filtering and cross-page deduplication until enough are found or search is exhausted. Recording exhaustion within a resumable run is planned. Duration is an eligibility filter only; popularity/recency ranking returns up to three candidates. Available English transcripts are acquired transiently, retaining original candidate identity and segment timing/provenance. Technical transcript-acquisition errors abort before source selection; normal absence can yield an empty acquired set.
+For each target, collection seeks 20 unique unseen candidates and returns at most 20, refilling after integrated-ID filtering and cross-page deduplication until enough are found or search is exhausted. Normal absence of a usable source is a persisted `NO_SELECTION`, not a technical failure. Duration is an eligibility filter only; popularity/recency ranking returns up to three candidates. Available English transcripts are acquired transiently, retaining original candidate identity and segment timing/provenance. Technical transcript-acquisition errors abort that target attempt before source selection; later Champions can continue.
 
 The implemented semantic stages are separate capabilities behind a provider-independent interface, with a DeepSeek adapter. Explicit allowlists serialize only target ID/name and video IDs/full transcript texts in canonical video-ID order. Neither stage receives popularity, recency, ranking scores, discovery order, channel popularity, or original shortlist rank. Both use complete available transcripts without silent truncation, summarization, or semantic pre-filtering.
 
@@ -86,11 +86,30 @@ The curator may apply NO_CHANGE, ENRICH, REWRITE, CREATE, MERGE, LINK, or FLAG_C
 
 The implemented SQLite catalog stores only integrated source IDs and their registration timestamps. Registration is idempotent and must follow successful Bronze persistence by a later caller; it does not implement Bronze itself. Collection reads a fixed integrated-ID snapshot and does not persist transient candidates.
 
-**Selected and integrated are distinct states.** A selected source is not registered until a later caller successfully persists it to Bronze. In the intended repeated-run flow, successful persistence/registration of A allows later collection to exclude A and seek B for the same Champion; after B is also integrated, another collection excludes both while seeking C. Run orchestration and those Bronze writes are planned. Rejected or losing candidates are not registered by acquisition.
+**Selected and integrated are distinct states.** A selected source is not registered until a later caller successfully persists it to Bronze. In the intended repeated-run flow, successful persistence/registration of A allows later collection to exclude A and seek B for the same Champion; after B is also integrated, another collection excludes both while seeking C. Run selection/progress is implemented, but those Bronze writes remain planned. Rejected or losing candidates are not registered by acquisition.
+
+The run service exposes explicit new/resume operations. Its separate SQLite database stores `acquisition_runs` and `acquisition_run_targets`; it has no write path into `integrated_sources`. Creation atomically copies catalog/version provenance and each Champion's ID, key, name and order, with an immutable count and canonical snapshot hash. SQL constraints/triggers protect the original target universe. Resume reconstructs that universe from stored rows and never loads a current or historical external catalog file.
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING
+    PENDING --> RUNNING: Commit attempt count + 1
+    RUNNING --> SELECTED: Selection succeeded
+    RUNNING --> NO_SELECTION: Normal domain outcome
+    RUNNING --> FAILED: Technical failure or interruption recovery
+    FAILED --> RUNNING: Explicit resume with attempt count below 3
+    SELECTED --> [*]: Skip on resume
+    NO_SELECTION --> [*]: Skip on resume
+    FAILED --> [*]: Exhausted at count 3
+```
+
+The attempt-start commit precedes external calls; every persistence transaction is short. Existing component retries stay internal to their component. A local OS execution guard rejects overlapping invocations without holding SQL locks during provider calls; it has no lease or heartbeat. After a crash, persisted `ACTIVE`/`RUNNING` is stale until explicit inspection/resume recovers it. Recovery records `FAILED / ORCHESTRATION / INTERRUPTED` without increasing the already consumed attempt count. Each invocation makes one pass; failed targets below three attempts wait for another explicit resume. Selected, normally unselected and exhausted targets are skipped.
+
+Run summaries derive counts from the original stored targets. Retryable work leaves `RESUMABLE`; all successful/domain outcomes yield `COMPLETED`; terminal exhausted failures yield `COMPLETED_WITH_FAILURES`. Target failures do not prevent later Champions, while unsafe persistent-state failures abort explicitly. A crash after external success but before result commit may repeat external work. Only minimal selection identity/method, outcome/failure codes and timestamps are persisted; transcript payloads and the full in-memory selected-source handoff remain outside run-state storage. See [run API and recovery](../README.md#resumable-acquisition-runs).
 
 Additional sources may create or enrich knowledge, overlap with existing knowledge, expose conflicts, or yield `NO_CHANGE` in planned curation. Gold evolves through governed integration with existing knowledge rather than a separate rebuild for every source. These are intended integration outcomes, not implemented curation or guaranteed marginal knowledge gain.
 
-The planned wider local SQL store tracks logical runs and progress, per-target results, raw knowledge-change counts, and Gold index synchronization state. Raw counts will support comparison of marginal knowledge gain across repeated runs; V1 has no synthetic aggregate score or automatic stop threshold. Schemas for those additional responsibilities remain future technical design work.
+Run progress and per-target acquisition results are implemented. Wider operational SQL responsibilities, including raw knowledge-change counts and Gold index synchronization state, remain planned. Raw counts will support comparison of marginal knowledge gain across repeated runs; V1 has no synthetic aggregate score or automatic stop threshold. Schemas for those additional responsibilities remain future technical design work.
 
 The planned local retrieval/vector index serves the Gold Wiki but is not authoritative. Changed Gold documents are re-chunked and re-embedded, their vectors are upserted, stale vectors are removed where applicable, and synchronization state is updated. A full rebuild after each curation run is not required. No vector database product is mandated.
 

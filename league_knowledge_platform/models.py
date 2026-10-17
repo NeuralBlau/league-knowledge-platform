@@ -34,6 +34,41 @@ class ChampionTarget:
 
 
 @dataclass(frozen=True, slots=True)
+class ChampionCatalog:
+    """Complete validated target data and provenance, independent of a source file."""
+
+    schema_version: int
+    roster_version: str
+    generated_at_utc: datetime
+    source_provider: str
+    source_url: str
+    source_locale: str
+    targets: tuple[ChampionTarget, ...]
+
+    def __post_init__(self) -> None:
+        if (type(self.schema_version) is not int or self.schema_version != 1
+                or not isinstance(self.roster_version, str)
+                or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", self.roster_version) is None
+                or not isinstance(self.generated_at_utc, datetime)
+                or self.generated_at_utc.utcoffset() != timezone.utc.utcoffset(None)):
+            raise ValueError("Invalid Champion catalog version or timestamp")
+        if (self.source_provider != "Riot Games Data Dragon" or self.source_locale != "en_US"
+                or self.source_url != "https://ddragon.leagueoflegends.com/cdn/"
+                + self.roster_version + "/data/en_US/champion.json"):
+            raise ValueError("Invalid Champion catalog provenance")
+        if (not isinstance(self.targets, tuple) or not self.targets
+                or any(not isinstance(t, ChampionTarget) for t in self.targets)):
+            raise ValueError("A catalog requires a complete immutable target universe")
+        for target in self.targets:
+            if (target.id != target.id.strip() or not target.key.isascii()
+                    or not target.key.isdecimal()):
+                raise ValueError("Invalid Champion catalog identity")
+        if (len({t.id for t in self.targets}) != len(self.targets)
+                or len({t.key for t in self.targets}) != len(self.targets)):
+            raise ValueError("Duplicate Champion catalog identity")
+
+
+@dataclass(frozen=True, slots=True)
 class DiscoveryCursor:
     target_id: str
     page_token: str

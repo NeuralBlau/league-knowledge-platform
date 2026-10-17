@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from league_knowledge_platform import TargetLoadError, load_targets
+from league_knowledge_platform import TargetLoadError, load_catalog, load_targets
 from league_knowledge_platform.targets import DEFAULT_CATALOG
 
 
@@ -24,6 +24,14 @@ class TargetLoadingTests(unittest.TestCase):
         self.assertEqual(len({target.key for target in targets}), len(targets))
         self.assertEqual((targets[0].id, targets[0].key, targets[0].name),
                          ("Aatrox", "266", "Aatrox"))
+
+    def test_complete_catalog_preserves_provenance_and_uses_the_same_validation(self):
+        catalog = load_catalog()
+        self.assertEqual(catalog.targets, load_targets())
+        self.assertEqual(catalog.roster_version, self.catalog["roster_version"])
+        self.assertEqual(catalog.schema_version, self.catalog["schema_version"])
+        self.assertEqual(catalog.source_url, self.catalog["source"]["url"])
+        self.assertEqual(catalog.source_provider, self.catalog["source"]["provider"])
 
     def test_missing_or_unreadable_catalog_fails(self):
         with tempfile.TemporaryDirectory() as directory:

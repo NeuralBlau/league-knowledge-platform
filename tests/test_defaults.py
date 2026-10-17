@@ -17,6 +17,8 @@ class DefaultsTests(unittest.TestCase):
         self.assertEqual(defaults.MAX_VIDEO_DURATION_SECONDS, 1800)
         self.assertEqual(defaults.RANKING_TOP_K, 3)
         self.assertEqual(defaults.UNSEEN_CANDIDATE_LIMIT, 20)
+        self.assertEqual(defaults.MAX_TARGET_ATTEMPTS, 3)
+        self.assertEqual(defaults.RUN_STATE_TIMEOUT_SECONDS, 5)
         self.assertEqual(models.UNSEEN_CANDIDATE_LIMIT, defaults.UNSEEN_CANDIDATE_LIMIT)
         self.assertEqual(defaults.DISCOVERY_PAGE_SIZE, 25)
         self.assertEqual(defaults.DISCOVERY_TIMEOUT_SECONDS, 15)
