@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .models import ChampionTarget
+from .models import ChampionCatalog, ChampionTarget
 
 DEFAULT_CATALOG = Path(__file__).resolve().parents[1] / "data" / "champion_targets.json"
 _ROSTER_VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+\Z")
@@ -25,8 +25,8 @@ def _require(condition: bool, message: str) -> None:
         raise TargetLoadError(message)
 
 
-def load_targets(path: Path = DEFAULT_CATALOG) -> tuple[ChampionTarget, ...]:
-    """Validate and return every configured Champion target, or fail atomically."""
+def load_catalog(path: Path = DEFAULT_CATALOG) -> ChampionCatalog:
+    """Validate targets and provenance from one read, or fail atomically."""
     try:
         catalog = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -79,4 +79,12 @@ def load_targets(path: Path = DEFAULT_CATALOG) -> tuple[ChampionTarget, ...]:
         seen_ids.add(champion_id)
         seen_keys.add(key)
         targets.append(ChampionTarget(id=champion_id, key=key, name=name))
-    return tuple(targets)
+    return ChampionCatalog(
+        catalog["schema_version"], version, timestamp, source["provider"],
+        source["url"], source["locale"], tuple(targets),
+    )
+
+
+def load_targets(path: Path = DEFAULT_CATALOG) -> tuple[ChampionTarget, ...]:
+    """Preserve the original target-loading API and complete validation contract."""
+    return load_catalog(path).targets

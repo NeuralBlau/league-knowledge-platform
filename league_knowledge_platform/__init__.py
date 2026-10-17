@@ -1,12 +1,12 @@
 """Local League knowledge acquisition components."""
 
 from .models import (
-    CandidateVideo, ChampionTarget, DiscoveryCursor, DiscoveryPage,
+    CandidateVideo, ChampionCatalog, ChampionTarget, DiscoveryCursor, DiscoveryPage,
     RankedCandidate, RankedCandidateSet, UnseenCandidateSet,
 )
 from .ranking import DEFAULT_RANKING_CONFIG, RankingConfig, rank_candidates
 from .source_catalog import SourceCatalogError, SQLiteSourceCatalog, initialize_source_catalog
-from .targets import TargetLoadError, load_targets
+from .targets import TargetLoadError, load_catalog, load_targets
 from .transcript_models import (
     CaptionKind, CaptionSegment, CaptionTrack, ProviderTranscript, TranscriptOutcome,
     TranscriptSegment, TranscriptStatus, TranscriptUnavailableReason, TransientTranscript,
@@ -39,8 +39,19 @@ from .source_selection import (
     SourceSelectionCapability, select_source,
 )
 from .deepseek_selection import DeepSeekSelectionAdapter, DeepSeekSelectionConfig
+from .run_models import (
+    AcquisitionRun, RunConfigurationError, RunNotFoundError, RunStage, RunStateError,
+    RunStatus, RunSummary, RunTarget, RunTargetStatus, TargetFailure, TargetFailureKind,
+)
+from .run_lock import RunBusyError
+from .run_repository import SQLiteRunRepository, initialize_run_repository
+from .acquisition_runs import AcquisitionRunService
 
 __all__ = [
+    "AcquisitionRun", "AcquisitionRunService", "ChampionCatalog", "RunBusyError",
+    "RunConfigurationError", "RunNotFoundError", "RunStage", "RunStateError", "RunStatus",
+    "RunSummary", "RunTarget", "RunTargetStatus", "TargetFailure", "TargetFailureKind",
+    "SQLiteRunRepository", "initialize_run_repository", "load_catalog",
     "CandidateQualityAssessment", "ComparativeCandidateAssessment", "ComparativeSelection",
     "ComparativeSelectionRequest", "DEFAULT_SELECTION_CONFIG", "DeepSeekSelectionAdapter",
     "DeepSeekSelectionConfig", "NoSelection", "NoSelectionReason", "QualityAssessmentBatch",
