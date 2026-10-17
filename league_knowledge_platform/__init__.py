@@ -1,5 +1,13 @@
 """Local League knowledge acquisition components."""
 
+from .bronze import (
+    BRONZE_SCHEMA_VERSION, DEFAULT_BRONZE_CONFIG, BronzeConfig, BronzeContractError,
+    BronzeError, BronzeFilesystemError, BronzeIntegrationContext, BronzeIntegrationResult,
+    BronzeIntegrityError, BronzeRegistrationError, IntegratedSourceCatalog,
+    canonical_bronze_path, construct_bronze_artifact, decode_bronze_artifact,
+    integrate_selected_source, validate_bronze_artifact,
+)
+
 from .models import (
     CandidateVideo, ChampionCatalog, ChampionTarget, DiscoveryCursor, DiscoveryPage,
     RankedCandidate, RankedCandidateSet, UnseenCandidateSet,
@@ -48,6 +56,11 @@ from .run_repository import SQLiteRunRepository, initialize_run_repository
 from .acquisition_runs import AcquisitionRunService
 
 __all__ = [
+    "BRONZE_SCHEMA_VERSION", "DEFAULT_BRONZE_CONFIG", "BronzeConfig", "BronzeContractError",
+    "BronzeError", "BronzeFilesystemError", "BronzeIntegrationContext", "BronzeIntegrationResult",
+    "BronzeIntegrityError", "BronzeRegistrationError", "IntegratedSourceCatalog",
+    "canonical_bronze_path", "construct_bronze_artifact", "decode_bronze_artifact",
+    "integrate_selected_source", "validate_bronze_artifact",
     "AcquisitionRun", "AcquisitionRunService", "ChampionCatalog", "RunBusyError",
     "RunConfigurationError", "RunNotFoundError", "RunStage", "RunStateError", "RunStatus",
     "RunSummary", "RunTarget", "RunTargetStatus", "TargetFailure", "TargetFailureKind",

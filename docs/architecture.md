@@ -4,12 +4,12 @@ The Knowledge Platform is the acquisition and preparation side of an experiment 
 
 ## V1 acquisition and compilation flow
 
-The architecture has three separate views. Source Acquisition is implemented through transient selection outcomes; the downstream curation and comparative experiment remain planned. These views preserve the existing Bronze/Silver/Gold responsibilities and local-first design.
+The architecture has three separate views. Source Acquisition provides transient selection outcomes and a separate Bronze integration API; the downstream curation and comparative experiment remain planned. These views preserve the existing Bronze/Silver/Gold responsibilities and local-first design.
 
 | View | Current status |
 | --- | --- |
-| [Source Acquisition](#source-acquisition) | Implemented target loading, discovery, integrated-ID lookup, filtering/refill, metadata ranking, transient transcripts, absolute quality assessment, deterministic gating, and conditional comparison |
-| [Agentic Knowledge Curation](#knowledge-layers-and-curator) | Planned Bronze/Silver processing, extraction, external validation, existing-knowledge inspection, integration, deterministic writing, and Gold |
+| [Source Acquisition](#source-acquisition) | Implemented target loading, discovery, integrated-ID lookup, filtering/refill, metadata ranking, transient transcripts, absolute quality assessment, deterministic gating, conditional comparison, and separately invoked Bronze integration |
+| [Agentic Knowledge Curation](#knowledge-layers-and-curator) | Planned Silver processing, extraction, external validation, existing-knowledge inspection, integration, deterministic writing, and Gold |
 | [Experimental Evaluation](#planned-comparative-evaluation) | Planned fixed-size baseline and quality/query-time-efficiency comparison |
 
 Manually initiated sequential run orchestration is implemented through source selection, with its own SQLite progress database and immutable target snapshots. The integrated-source catalog remains separate. Bronze persistence, curation and other future operational SQL responsibilities are not delivered by run progress. The platform is not yet a completed end-to-end acquisition/curation system.
@@ -37,7 +37,8 @@ flowchart TD
     L -- "Validated winner" --> W
     Q -. "Technical failure after allowed attempts" .-> F["SELECTION_FAILED"]
     L -. "Technical failure after allowed attempts" .-> F
-    W -. "Future persistence boundary" .-> B["Planned Bronze processing"]
+    W -- "Explicit caller handoff" --> B["Atomic selected-source Bronze persistence"]
+    B -- "Durable file validated" --> IC["Idempotent integrated-source registration"]
 ```
 
 The initial target catalog lists all Champions without enumerating Champion × Role combinations. Run orchestration attempts every original target, resumes across sessions, and records at most one selected source per target/run. Actual integration remains downstream of selection. A Champion is never permanently complete. Role-specific and reusable general knowledge can emerge from content; systematic general-concept acquisition remains future scope.
@@ -52,15 +53,15 @@ The implemented semantic stages are separate capabilities behind a provider-inde
 
 **Stage 2 — relative comparison:** Only passing transcripts are compared for target relevance, educational usefulness, information density, clarity/explanatory value, useful breadth/depth, and noise. Fresh request objects and messages exclude Stage-1 assessments, booleans, codes, and rationales. The chosen ID and complete assessment coverage are validated against the passing set. No weighted numeric formula is introduced.
 
-Each semantic stage permits at most three total attempts for recoverable failures or invalid output, reusing unchanged inputs. Unrecoverable errors fail explicitly without consuming unnecessary retries. Technical inability to complete selection yields `SELECTION_FAILED`, not `NO_SELECTION` or a fallback winner. A Stage-2 failure does not repeat successful quality assessment or restart acquisition. All results, assessments, and transcripts remain transient. Only `SELECTED` is eligible for the planned Bronze stage; it does not itself persist or register a source. See the [selection API overview](../README.md#source-quality-assessment-and-selection).
+Each semantic stage permits at most three total attempts for recoverable failures or invalid output, reusing unchanged inputs. Unrecoverable errors fail explicitly without consuming unnecessary retries. Technical inability to complete selection yields `SELECTION_FAILED`, not `NO_SELECTION` or a fallback winner. A Stage-2 failure does not repeat successful quality assessment or restart acquisition. All results, assessments, and transcripts remain transient. Only `SELECTED` is eligible for the separate Bronze integration API; it does not itself persist or register a source. See the [selection API overview](../README.md#source-quality-assessment-and-selection).
 
 ## Knowledge layers and curator
 
-These layers and curator responsibilities are planned. The intended curator comprises logical Knowledge Extraction and Knowledge Integration stages followed by a Deterministic Writer. Extraction progresses through SEGMENT, VALIDATE, EXTRACT, VALIDATE, AUDIT/REFINE, and VALIDATE to Knowledge Items. Structured artifacts pass explicit validation gates; failures return corrective feedback to the agent before progression. Integration inspects existing Gold and proposes governed changes; deterministic code applies validated, approved changes. This staged explanation preserves the existing curator boundary and does not establish a new runtime implementation or artifact schema. See [planned curation](../README.md#planned-agentic-knowledge-curation).
+Bronze persistence is implemented separately. Silver and the curator responsibilities below remain planned. The intended curator comprises logical Knowledge Extraction and Knowledge Integration stages followed by a Deterministic Writer. Extraction progresses through SEGMENT, VALIDATE, EXTRACT, VALIDATE, AUDIT/REFINE, and VALIDATE to Knowledge Items. Structured artifacts pass explicit validation gates; failures return corrective feedback to the agent before progression. Integration inspects existing Gold and proposes governed changes; deterministic code applies validated, approved changes. This staged explanation preserves the existing curator boundary and does not establish a new runtime implementation or artifact schema. See [planned curation](../README.md#planned-agentic-knowledge-curation).
 
 ```mermaid
 flowchart TD
-    S["Selected Source"] --> B["Planned Bronze / Silver Transcript Processing"]
+    S["Persisted Bronze Source"] --> B["Planned Silver Transcript Processing"]
     B --> E["Planned Agentic Knowledge Extraction"]
     E --> V["External Validation and Corrective Feedback"]
     V -- "Needs correction" --> E
@@ -84,9 +85,11 @@ The curator may apply NO_CHANGE, ENRICH, REWRITE, CREATE, MERGE, LINK, or FLAG_C
 
 ## Local state and retrieval boundary
 
-The implemented SQLite catalog stores only integrated source IDs and their registration timestamps. Registration is idempotent and must follow successful Bronze persistence by a later caller; it does not implement Bronze itself. Collection reads a fixed integrated-ID snapshot and does not persist transient candidates.
+The implemented SQLite catalog stores only integrated source IDs and their registration timestamps. Registration is idempotent and must follow successful persistence by the separate Bronze integration caller; the catalog does not implement Bronze itself. Collection reads a fixed integrated-ID snapshot and does not persist transient candidates.
 
-**Selected and integrated are distinct states.** A selected source is not registered until a later caller successfully persists it to Bronze. In the intended repeated-run flow, successful persistence/registration of A allows later collection to exclude A and seek B for the same Champion; after B is also integrated, another collection excludes both while seeking C. Run selection/progress is implemented, but those Bronze writes remain planned. Rejected or losing candidates are not registered by acquisition.
+The [Bronze API](../README.md#selected-source-bronze-integration) stores one versioned source-centric JSON artifact per case-sensitive video ID, using a reversible filename encoding for Windows compatibility. It retains the original source/transcript and first-integration target/run/winner provenance. Sibling staging, flushing, validation and non-overwriting publication precede catalog registration. Compatible retries reuse the original bytes, including after a crash between publication and registration. Later contextual provenance does not independently conflict or mutate Bronze; materially different source/transcript content fails explicitly. No event-history tables, provenance sidecars, Silver transformations or run-state changes are added.
+
+**Selected and integrated are distinct states.** A selected source is not registered until a later caller successfully persists it to Bronze. In the intended repeated-run flow, successful persistence/registration of A allows later collection to exclude A and seek B for the same Champion; after B is also integrated, another collection excludes both while seeking C. Run selection/progress and a separately invoked Bronze integration API are implemented. The run service does not invoke Bronze automatically. Rejected or losing candidates are not registered by acquisition.
 
 The run service exposes explicit new/resume operations. Its separate SQLite database stores `acquisition_runs` and `acquisition_run_targets`; it has no write path into `integrated_sources`. Creation atomically copies catalog/version provenance and each Champion's ID, key, name and order, with an immutable count and canonical snapshot hash. SQL constraints/triggers protect the original target universe. Resume reconstructs that universe from stored rows and never loads a current or historical external catalog file.
 

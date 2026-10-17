@@ -62,13 +62,13 @@ Stage 1 assesses each available transcript independently against an absolute min
 
 Zero passing candidates produces normal `NO_SELECTION`. One is selected directly, without a comparative call. Two or three invoke a separate relative comparison to select the strongest passing source. Stage 2 receives no Stage-1 assessments, booleans, reason codes, or rationales. Neither semantic stage receives popularity, recency, ranking scores, discovery order, or original shortlist rank; explicit request allowlists preserve this boundary.
 
-Selection uses full available transcript text and retains the original candidate identity and segment timing/provenance internally. An empty acquired set produces `NO_SELECTION` without an LLM call. A technical selection failure produces `SELECTION_FAILED`, never a fallback winner or normal no-selection. Technical caption-acquisition failures abort before source selection. Only a successfully selected source is eligible for later Bronze processing; that persistence is not implemented yet.
+Selection uses full available transcript text and retains the original candidate identity and segment timing/provenance internally. An empty acquired set produces `NO_SELECTION` without an LLM call. A technical selection failure produces `SELECTION_FAILED`, never a fallback winner or normal no-selection. Technical caption-acquisition failures abort before source selection. Only a successfully selected source is eligible for the separate [Bronze integration API](#selected-source-bronze-integration).
 
 Automated discovery refers to callable components. A manually invoked [run service](#resumable-acquisition-runs) now composes them sequentially with persistent progress. Scheduling remains outside V1.
 
 ### Incremental Source Acquisition
 
-Repeated acquisition is intended to find additional previously unseen sources for the same Champion. Integrated-source filtering and resumable acquisition through selection are implemented; Bronze persistence and subsequent knowledge integration remain planned. The following conceptual example assumes successful future Bronze persistence and catalog registration after each selected source:
+Repeated acquisition is intended to find additional previously unseen sources for the same Champion. Integrated-source filtering, resumable acquisition through selection, and a separately invoked Bronze integration API are implemented; subsequent knowledge integration remains planned. The following example assumes the caller invokes Bronze integration after each selected source:
 
 | Logical run | Example |
 | --- | --- |
@@ -82,13 +82,14 @@ An additional source does not necessarily contribute useful new knowledge. Plann
 
 ## Current Implementation
 
-The repository currently implements Source Acquisition through transient source-selection outcomes:
+The repository implements Source Acquisition through transient source selection, resumable progress, and separately invoked Bronze integration:
 
 | Implemented capability | Repository evidence |
 | --- | --- |
 | Versioned Champion target catalog and local validation/loading | [Catalog](data/champion_targets.json), [target loader](league_knowledge_platform/targets.py) |
 | Automated YouTube candidate discovery with metadata and continuation cursors | [Discovery](league_knowledge_platform/youtube.py) |
 | Persistent SQLite lookup and idempotent registration of successfully integrated source IDs | [Source catalog](league_knowledge_platform/source_catalog.py) |
+| Immutable selected-source Bronze JSON, exact segment timing, original provenance and post-persistence registration | [Bronze integration](league_knowledge_platform/bronze.py), [local publication](league_knowledge_platform/_bronze_filesystem.py) |
 | Unseen-source filtering, refill, immutable integrated-ID snapshot, and cross-page deduplication preserving first-seen order | [Collection](league_knowledge_platform/unseen.py) |
 | Deterministic popularity/recency ranking, explicit reference time, and configurable duration eligibility through central defaults | [Ranking](league_knowledge_platform/ranking.py), [defaults](league_knowledge_platform/defaults.py) |
 | Transient acquisition of timestamped English YouTube captions, manual-English preference, and provider failure handling | [Acquisition](league_knowledge_platform/transcripts.py), [provider adapter](league_knowledge_platform/youtube_caption_provider.py) |
@@ -99,15 +100,15 @@ The repository currently implements Source Acquisition through transient source-
 
 Collection returns at most 20 unique unseen candidates. Duration is an eligibility filter only; popularity and recency determine ranking. The shortlist contains 0–3 candidates. Caption unavailability is candidate-level and non-fatal; technical provider failures fail the operation without returning a successful partial transcript set.
 
-The source catalog capability does **not** mean Bronze persistence exists. Its later integration caller must register a selected source only after successful Bronze persistence. Discovered, ranked, rejected candidates and acquired transcripts are not persisted by these acquisition components.
+The separate Bronze integration API persists and validates the selected source before calling catalog registration. Discovery, ranking, transcript acquisition, semantic selection and run progress do not invoke it automatically or persist their transient candidates.
 
-The platform as a whole remains in development. Bronze/Silver processing, agentic curation, the Deterministic Writer, Gold storage, and retrieval indexing are planned, not delivered functionality. The fixed-size baseline and comparative evaluation are also not implemented. Implemented acquisition and its offline tests do not demonstrate live provider availability, semantic model quality, or the research hypothesis.
+The platform as a whole remains in development. Silver processing, agentic curation, the Deterministic Writer, Gold storage, and retrieval indexing are planned, not delivered functionality. The fixed-size baseline and comparative evaluation are also not implemented. Implemented acquisition and its offline tests do not demonstrate live provider availability, semantic model quality, or the research hypothesis.
 
 ## Planned Agentic Knowledge Curation
 
 The planned curator has two logical AI stages, **Knowledge Extraction** and **Knowledge Integration**, followed by a **Deterministic Writer**. This explains the intended curation inside the accepted Knowledge Platform architecture; it does not introduce a replacement architecture or claim that these agents already exist.
 
-Its planned flow is **Selected Source → Transcript Processing → Agentic Knowledge Extraction → Existing-Knowledge Inspection → Knowledge Integration → Updated Structured Knowledge Base**. Bronze retains the selected raw source; Silver performs source-faithful transcript processing. External validation gates progression and deterministic code applies approved changes to existing Gold. See the separate [planned curation architecture](docs/architecture.md#knowledge-layers-and-curator).
+Its planned downstream flow is **Selected Source → Transcript Processing → Agentic Knowledge Extraction → Existing-Knowledge Inspection → Knowledge Integration → Updated Structured Knowledge Base**. Bronze retains the selected raw source; Silver performs source-faithful transcript processing. External validation gates progression and deterministic code applies approved changes to existing Gold. See the separate [planned curation architecture](docs/architecture.md#knowledge-layers-and-curator).
 
 Knowledge Extraction is planned as:
 
@@ -146,7 +147,7 @@ The central evaluation question is: **Does additional work during knowledge prep
 ## Architecture Principles
 
 - **Local-first V1:** Local artifacts and stores, with external source/search and LLM APIs where required. Azure remains a possible future deployment target.
-- **Traceable medallion layers:** Planned Bronze retains selected raw sources; Silver remains source-faithful; Gold is the canonical, adaptive Markdown Knowledge Wiki with provenance and visible contradictions.
+- **Traceable medallion layers:** Bronze retains selected raw sources; Silver remains source-faithful; Gold is the canonical, adaptive Markdown Knowledge Wiki with provenance and visible contradictions.
 - **Derived retrieval:** The planned local retrieval index is derived from Gold and synchronized incrementally. A relation-aware representation does not require a new graph database or fixed Gold ontology.
 - **Controlled integration:** Transient candidates remain unpersisted; planned curation validates proposed changes before deterministic application.
 - **Human-supervised development:** Versioned plans, human design approval, validation, and human PR review/merge follow the [development workflow](docs/development-workflow.md).
@@ -159,7 +160,8 @@ See [V1 scope](docs/scope.md), [architecture](docs/architecture.md), and the [ar
 | --- | --- |
 | Implemented | Champion targets, discovery, integrated-source lookup, unseen collection, ranking, transient transcripts, absolute quality assessment, deterministic gating, conditional comparison, and resumable acquisition runs with offline tests |
 | In development | Knowledge Platform overall; acquisition components exist, but the full acquisition/curation pipeline is incomplete |
-| Planned next | Selected-source Bronze and source-faithful Silver processing |
+| Implemented | Explicit selected-source Bronze persistence, post-persistence registration and offline recovery tests |
+| Planned next | Source-faithful Silver processing |
 | Planned subsequent | Validated agentic curation, Deterministic Writer, canonical Gold, incremental retrieval index, and raw knowledge-change metrics |
 | Planned evaluation | Fixed-size baseline, query-time comparison, and quality/efficiency/preparation measurements |
 
@@ -218,7 +220,7 @@ Each collection reads one immutable integrated-ID snapshot before requesting its
 
 A discovery failure, including on a later refill page, raises `UnseenCollectionError` rather than returning a successful partial pool. Its `kind`, optional `discovery_failure_kind`, and exception cause distinguish discovery, catalog, and contract failures. Collection does not retry discovery automatically, initialize missing databases, register candidates, or write any persistent state. Missing/corrupt catalogs and unsupported schema versions fail explicitly.
 
-The snapshot is fixed for one collection; it is not a reservation against concurrent source integration. Registration uses short atomic SQL transactions and an idempotent video-ID primary key. Coordinating parallel integrations and recovering between Bronze writes and catalog registration belong to later orchestration. Ranking, transcripts, source selection, Bronze/Silver/Gold processing, run state, and scheduling are not implemented by this collector.
+The snapshot is fixed for one collection; it is not a reservation against concurrent source integration. Registration uses short atomic SQL transactions and an idempotent video-ID primary key. The separate Bronze API recovers between durable writes and registration; callers serialize integration operations. Ranking, transcripts, source selection, Bronze/Silver/Gold processing, run state, and scheduling are not implemented by this collector.
 
 Run offline tests with `python -m unittest discover -s tests -v`. They use injected responses and require neither a YouTube key nor network access.
 
@@ -304,6 +306,39 @@ Provide `DEEPSEEK_API_KEY` through the environment or explicit runtime injection
 | `SelectionFailed` / `SELECTION_FAILED` | Technical/model failure prevented selection; no winner is returned. |
 
 The selection service owns retries: at most three total attempts per semantic stage reuse unchanged inputs. A comparative-stage failure does not repeat successful quality assessment or restart discovery, collection, ranking, or transcript acquisition. The outputs and assessments remain transient, with no Bronze writes or source-catalog mutation. Offline domain, synthetic HTTP, and ranker/caption/selection integration tests are included in the existing test command. Installing both optional requirements files includes the caption and selection adapter coverage; without their respective dependencies, those adapter tests explicitly skip.
+
+## Selected-source Bronze integration
+
+`integrate_selected_source` explicitly consumes an in-memory `SelectedSource`. It does not call discovery, captions, an LLM, Silver or Gold. The run service remains separate: its stored video ID alone cannot reconstruct the full transcript needed here.
+
+```python
+from league_knowledge_platform import (
+    BronzeConfig, BronzeIntegrationContext, initialize_source_catalog,
+    integrate_selected_source,
+)
+
+catalog = initialize_source_catalog(".state/knowledge_platform.sqlite3")
+# selected is the successful in-memory result from select_source(...).
+result = integrate_selected_source(
+    selected,
+    catalog=catalog,
+    config=BronzeConfig(root="data/bronze"),
+    context=BronzeIntegrationContext(run_id="optional-logical-run-id"),
+)
+print(result.video_id, result.path, result.created, result.registered)
+```
+
+Keep one Bronze root for every caller sharing a source catalog, and serialize integration calls. The central non-secret `BRONZE_ROOT` default is `data/bronze`. Runtime artifacts are ignored by Git. `canonical_bronze_path(video_id, config)` maps each case-sensitive source ID to `youtube/id-<lowercase ASCII hex>.json`: `A` becomes `id-41.json`, while `a` becomes `id-61.json`, including on case-insensitive Windows filesystems. Target/run identity never changes the path. The canonical YouTube URL is derived from the validated ID.
+
+Each UTF-8 JSON artifact has `schema_version: 1` and `source`, `acquisition`, `selection` and `transcript` sections. It retains available discovery metadata, the original target/run/timestamps, winner-only quality and comparative provenance, provider/track metadata, full normalized transcript text and every acquired segment's raw/normalized text, original index and timing. Decimal seconds are stored as strings without binary float conversion. Unavailable optional metadata remains null. Runtime provider handles, rejected/losing transcripts and other candidates' assessments are omitted. `construct_bronze_artifact`, `decode_bronze_artifact` and `validate_bronze_artifact` expose the same strict contract.
+
+Compatibility requires the same source type, case-sensitive video ID, deterministic URL, language, caption kind, full text, ordered segment indices/text and exact numeric timing. Non-null source track IDs must agree when both encounters supply them. Discovery display metadata, provider/version and target/run/selection context are first-integration snapshots: differences do not rewrite the artifact or independently cause conflicts. An absent track ID is not backfilled. Numerically equivalent decimal representations compare equal; stored bytes stay unchanged.
+
+Persistence stages a complete sibling temporary file, flushes it, validates it and publishes without overwriting an existing destination. Windows uses a write-through native move; POSIX uses non-overwriting hard-link publication and directory synchronization. These guarantees require a supported local filesystem; the native Windows path is tested on NTFS. Storage that does not honor flushes and concurrent/external mutation are outside the guarantee. Directory/publication/durability failures are explicit. Canonical validation and durability confirmation precede `register_integrated`; only its successful completion produces an integration result.
+
+The first durable artifact retains the original provenance even if registration fails. Retry reuses compatible Bronze without rewriting it, then completes idempotent registration; `created` and `registered` distinguish new work from a no-op. Later different target/run/selection context is neither appended nor backfilled. There is no provenance sidecar or historical event store. Material source/transcript conflicts, invalid existing artifacts, or catalog registration without valid Bronze raise `BronzeIntegrityError`. Other errors distinguish contract, filesystem and registration failures; the registration error leaves Bronze available for retry.
+
+Ordinary failures clean their own staging file. After process death, a caller-serialized retry removes only matching temporary names for that source, never promotes temporary content, and never deletes canonical JSON. Tests cover real SQLite failures and fresh-process interruption before/after publication. Atomic visibility and flush ordering do not establish physical power-loss behavior on every storage device.
 
 ## Resumable acquisition runs
 
